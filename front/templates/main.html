@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Интерактивная экскурсия</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+  <div id="map-container">
+    <img id="evac-plan" src="" alt="План эвакуации">
+    <!-- сюда JS будет вставлять точки -->
+  </div>
+  <div id="panorama-viewer"></div>
+
+  <script src="{% static 'tours/js/main.js' %}"></script>
+</body>
+</html>
