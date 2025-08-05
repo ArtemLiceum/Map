@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     # local
     'map_api',
+    'front',
 ]
 
 MIDDLEWARE = [
@@ -154,6 +155,25 @@ MEDIA_URL = "/uploads/"
 
 LOCALE_PATHS = [
     BASE_DIR / "locale",
+]
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / 'front' / 'templates'],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+STATICFILES_DIRS = [
+    BASE_DIR / 'front' / 'static',
 ]
 
 # Default primary key field type
