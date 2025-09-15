@@ -17,6 +17,7 @@ drf-spectacular = "^0.28.0"
 psycopg2 = "^2.9.10"
 django-filter = "^25.1"
 pillow = "^11.3.0"
+python-dotenv = "^1.1.1"
 
 
 [build-system]
