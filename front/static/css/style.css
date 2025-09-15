@@ -1,0 +1,115 @@
+/* ===== Сброс и базовые стили ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: #f4f6fa;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ===== Заголовок ===== */
+header {
+    background: linear-gradient(135deg, #0061ff, #60efff);
+    color: white;
+    text-align: center;
+    padding: 1rem 2rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* ===== Основная область ===== */
+main {
+    display: flex;
+    flex: 1;
+    padding: 1rem;
+    gap: 1rem;
+}
+
+/* ===== Карта ===== */
+#map-container {
+    flex: 1;
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+#map-container img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+/* ===== Точки на плане ===== */
+.point {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff3d71;
+    border: 2px solid white;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.point:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 10px rgba(255, 61, 113, 0.7);
+}
+
+/* ===== Панорама ===== */
+#panorama-viewer {
+    flex: 1;
+    background: #111;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    overflow: hidden;
+    position: relative;
+}
+
+#panorama-viewer img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ===== Панель навигации / кнопки ===== */
+.controls {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+button {
+    background: #0061ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #004fcc;
+}
+
+/* ===== Футер ===== */
+footer {
+    background: #222;
+    color: #aaa;
+    text-align: center;
+    padding: 0.8rem;
+    font-size: 0.9rem;
+}
