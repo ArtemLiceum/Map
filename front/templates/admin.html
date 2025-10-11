@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Evac Plan Editor</title>
+  <style>
+    body{font-family:Inter, system-ui, Arial;margin:16px;color:#111}
+    .container{max-width:1100px;margin:auto}
+    h1{font-size:20px}
+    .row{display:flex;gap:16px}
+    .panel{flex:1;background:#fafafa;border:1px solid #eee;padding:12px;border-radius:8px}
+    #planWrap{position:relative;display:inline-block;border:1px solid #ddd}
+    #plan{max-width:100%;height:auto;display:block}
+    .marker{position:absolute;width:28px;height:28px;border-radius:50%;background:#ff5a5f;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transform:translate(-50%,-50%);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+    .btn{display:inline-block;padding:8px 12px;border-radius:6px;border:0;background:#2563eb;color:#fff;cursor:pointer}
+    .small{font-size:13px;color:#666}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
+    .modal .card{background:#fff;padding:18px;border-radius:10px;min-width:320px;max-width:90%;}
+    label{display:block;margin-top:8px}
+    input[type=file]{margin-top:6px}
+    .panorama-view{position:relative;border:1px solid #ddd;overflow:visible;text-align:center;}
+    .panorama-view img{display:inline-block;max-width:100%;height:auto;}
+    .hint{font-size:13px;color:#666;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Редактор плана эвакуации — добавление точек и панорам</h1>
+    <div class="row">
+      <div class="panel">
+        <h3>1) Загрузить план (карта здания)</h3>
+        <input id="planUpload" type="file" accept="image/jpeg,image/png" />
+        <div class="hint">Можно сохранить на сервер через API (JPG или PNG).</div>
+
+        <hr />
+        <h3>2) План — добавить метку</h3>
+        <div class="small">Клик по картинке добавит метку. Метки сохраняются в процентах от размеров изображения.</div>
+        <div id="planWrap" style="margin-top:12px;">
+          <img id="plan" src="" alt="План (загрузите изображение)" />
+        </div>
+      </div>
+
+      <div class="panel" style="max-width:360px">
+        <h3>Список точек</h3>
+        <div id="pointsList" class="small"></div>
+        <hr />
+        <h3>Инструкция</h3>
+        <ol class="small">
+          <li>Загрузите план.</li>
+          <li>Кликните по месту — задайте имя точки и (опционально) загрузите панораму.</li>
+          <li>Нажмите на маркер — откроется панорама; в ней можно добавить маркеры для перехода к другим точкам.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div id="pointModal" class="modal">
+    <div class="card">
+      <h3 id="pointModalTitle">Новая точка</h3>
+      <label>Название<input id="pointName" type="text" /></label>
+      <label>Панорама (горизонтальное фото)<input id="panoramaUpload" type="file" accept="image/jpeg,image/png" /></label>
+      <div style="margin-top:12px;text-align:right">
+        <button id="savePointBtn" class="btn">Сохранить</button>
+        <button id="cancelPointBtn" class="btn" style="background:#6b7280">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panoramaModal" class="modal">
+    <div class="card" style="width:90%;max-width:1100px">
+      <h3 id="panoramaTitle">Панорама</h3>
+      <div class="panorama-view" id="panoramaView"></div>
+      <div class="hint">Клик по панораме — добавит маркер перехода.</div>
+      <div style="margin-top:10px;text-align:right">
+        <button id="closePanoramaBtn" class="btn">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = {
+      createPlan: '/api/evac_plans/',
+      createPoint: '/api/map_points/',
+      uploadPanorama: '/api/panoramas/',
+      createPanoramaMarker: '/api/panorama_markers/'
+    };
+
+    const LS_KEY = 'evac_editor_state_v1';
+    let state = { plan:null, points:[] };
+    const plan = document.getElementById('plan');
+    const planWrap = document.getElementById('planWrap');
+    const planUpload = document.getElementById('planUpload');
+    const pointModal = document.getElementById('pointModal');
+    const pointName = document.getElementById('pointName');
+    const panoramaUpload = document.getElementById('panoramaUpload');
+    const savePointBtn = document.getElementById('savePointBtn');
+    const cancelPointBtn = document.getElementById('cancelPointBtn');
+    const pointsList = document.getElementById('pointsList');
+    const panoramaModal = document.getElementById('panoramaModal');
+    const panoramaView = document.getElementById('panoramaView');
+    const panoramaTitle = document.getElementById('panoramaTitle');
+    const closePanoramaBtn = document.getElementById('closePanoramaBtn');
+    let tempPointCoords = null;
+    let editingPoint = null;
+
+    async function uploadPlan(file){
+      const form = new FormData(); form.append('title', file.name); form.append('image', file);
+      const res = await fetch(API.createPlan,{method:'POST',body:form});
+      if(!res.ok) throw new Error('Ошибка загрузки плана');
+      return await res.json();
+    }
+
+    async function createPoint(planId,name,x,y){
+      const res = await fetch(API.createPoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:planId,name,x,y})});
+      if(!res.ok) throw new Error('Ошибка создания точки');
+      return await res.json();
+    }
+
+    async function uploadPanorama(pointId,file){
+      const form = new FormData(); form.append('point',pointId); form.append('image',file);
+      const res = await fetch(API.uploadPanorama,{method:'POST',body:form});
+      if(!res.ok) throw new Error('Ошибка загрузки панорамы');
+      return await res.json();
+    }
+
+    async function createPanoramaMarker(panoramaId,targetPointId,azimuth,pitch){
+      const res = await fetch(API.createPanoramaMarker,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({panorama:panoramaId,target_point:targetPointId,azimuth,pitch})});
+      if(!res.ok) throw new Error('Ошибка создания маркера');
+      return await res.json();
+    }
+
+    function loadState(){
+      try{const raw = localStorage.getItem(LS_KEY); if(raw) state = JSON.parse(raw);}catch(e){console.warn(e)}
+      renderAll();
+    }
+    function saveState(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){console.warn(e)}}
+
+    planUpload.addEventListener('change',async (e)=>{
+      const file=e.target.files[0]; if(!file) return;
+      const planData = await uploadPlan(file);
+      state.plan={id:planData.id,title:planData.title,imageUrl:planData.image}; state.points=[];
+      saveState(); renderAll();
+    });
+
+    planWrap.addEventListener('click',(e)=>{
+      if(!state.plan) return alert('Загрузите план');
+      const rect=plan.getBoundingClientRect();
+      const xPct=(e.clientX-rect.left)/rect.width*100;
+      const yPct=(e.clientY-rect.top)/rect.height*100;
+      tempPointCoords={x:+xPct.toFixed(4),y:+yPct.toFixed(4)};
+      openPointModal();
+    });
+
+    function openPointModal(point){
+      editingPoint=point||null;
+      pointName.value=point?point.name:'';
+      panoramaUpload.value='';
+      document.getElementById('pointModalTitle').innerText=point?'Редактировать точку':'Новая точка';
+      pointModal.style.display='flex';
+    }
+    cancelPointBtn.addEventListener('click',()=>{pointModal.style.display='none'; tempPointCoords=null;});
+
+    savePointBtn.addEventListener('click',async ()=>{
+      const name=pointName.value.trim()||'Точка';
+      if(editingPoint){editingPoint.name=name; saveState(); renderAll(); pointModal.style.display='none'; return;}
+      const planId=state.plan.id; if(!planId) return alert('Сначала загрузите план');
+      const pointData=await createPoint(planId,name,tempPointCoords.x,tempPointCoords.y);
+      const point={id:pointData.id,name:pointData.name,x:pointData.x,y:pointData.y,panorama:null};
+      if(panoramaUpload.files.length){
+        const panoData=await uploadPanorama(point.id,panoramaUpload.files[0]);
+        point.panorama={id:panoData.id,imageUrl:panoData.image,markers:[]};
+      }
+      state.points.push(point); saveState(); renderAll(); pointModal.style.display='none'; tempPointCoords=null;
+    });
+
+    function renderAll(){
+      if(state.plan&&state.plan.imageUrl){plan.src=state.plan.imageUrl; plan.style.display='block';} else {plan.src=''; plan.style.display='none';}
+      document.querySelectorAll('.marker').forEach(n=>n.remove());
+      state.points.forEach(pt=>{
+        const el=document.createElement('div'); el.className='marker'; el.dataset.id=pt.id; el.title=pt.name; el.innerText='📍';
+        el.style.left=pt.x+'%'; el.style.top=pt.y+'%';
+        el.addEventListener('click',ev=>{ev.stopPropagation(); onClickPoint(pt);});
+        planWrap.appendChild(el);
+      });
+      pointsList.innerHTML=state.points.map(p=>`<div><b>${p.name}</b> — ${p.x.toFixed(2)}%, ${p.y.toFixed(2)}% <button onclick="editPoint(${p.id})">✏️</button> <button onclick="deletePoint(${p.id})">🗑️</button></div>`).join('')||'<div class="small">Точек пока нет</div>';
+    }
+
+    window.editPoint=function(id){const p=state.points.find(x=>x.id===id); if(!p) return; openPointModal(p);}
+    window.deletePoint=function(id){if(!confirm('Удалить точку?')) return; state.points=state.points.filter(p=>p.id!==id); saveState(); renderAll();}
+
+    async function onClickPoint(point){
+      if(!point.panorama){editingPoint=point; document.getElementById('pointModalTitle').innerText='Добавить панораму для '+point.name; pointName.value=point.name; panoramaUpload.value=''; pointModal.style.display='flex'; return;}
+      await openPanorama(point);
+    }
+
+    async function openPanorama(point) {
+      panoramaModal.style.display = 'flex';
+      panoramaTitle.innerText = 'Панорама — ' + point.name;
+      panoramaView.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = point.panorama.imageUrl;
+      img.alt = point.name;
+      img.style.cursor = 'crosshair';
+      panoramaView.appendChild(img);
+
+      // Загружаем маркеры только если их нет в состоянии
+      if (!point.panorama.markers || point.panorama.markers.length === 0) {
+        try {
+          const res = await fetch(`/api/panorama_markers/?panorama=${point.panorama.id}`);
+          point.panorama.markers = res.ok ? await res.json() : [];
+        } catch (e) {
+          console.warn(e);
+          point.panorama.markers = [];
+        }
+      }
+
+      img.onload = () => renderPanMarkers(); // отрисуем маркеры после загрузки
+
+      function renderPanMarkers() {
+        panoramaView.querySelectorAll('.pmarker').forEach(n => n.remove());
+        const w = img.offsetWidth;
+        const h = img.offsetHeight;
+        (point.panorama.markers || []).forEach(m => {
+          const mp = document.createElement('div');
+          mp.className = 'marker pmarker';
+          mp.style.width = '22px';
+          mp.style.height = '22px';
+          mp.style.transform = 'translate(-50%,-50%)';
+          const x = (m.azimuth % 360) / 360 * w;
+          const y = h / 2;
+          mp.style.left = x + 'px';
+          mp.style.top = y + 'px';
+          mp.title = '→ ' + (m.target_point_name || m.target_point);
+          mp.addEventListener('click', e => {
+            e.stopPropagation();
+            const target = state.points.find(p => p.id === m.target_point);
+            if (target) openPanorama(target);
+            else alert('Целевая точка не найдена');
+          });
+          panoramaView.appendChild(mp);
+        });
+      }
+
+      img.addEventListener('click', async ev => {
+        const w = img.offsetWidth;
+        const xfrac = (ev.offsetX / w);
+        const azimuth = +(xfrac*360).toFixed(2);
+        const pitch = 0;
+        const options = state.points.map(p => `${p.id}:${p.name}`).join('\n');
+        const targetId = parseInt(prompt(`Выберите целевую точку (ID:Name)\n${options}`));
+        if(!targetId || !state.points.find(p=>p.id===targetId)) return alert('Некорректная точка');
+
+        const newMarker = await createPanoramaMarker(point.panorama.id,targetId,azimuth,pitch);
+        // Сохраняем сразу в состояние точки, чтобы при повторном открытии была
+        point.panorama.markers.push(newMarker);
+        renderPanMarkers();
+      });
+
+      closePanoramaBtn.onclick = () => { panoramaModal.style.display = 'none'; }
+    }
+
+    document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.style.display='none';}));
+
+    loadState();
+  </script>
+</body>
+</html>
