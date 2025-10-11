@@ -1,16 +1,14 @@
-from rest_framework import routers
-from django.urls import path, include
+# urls.py
+from rest_framework.routers import DefaultRouter
 from .views import (
     EvacPlanViewSet, MapPointViewSet,
     PanoramaViewSet, PanoramaMarkerViewSet
 )
 
-router = routers.DefaultRouter()
-router.register(r'plans', EvacPlanViewSet)
-router.register(r'points', MapPointViewSet)
+router = DefaultRouter()
+router.register(r'evac_plans', EvacPlanViewSet)
+router.register(r'map_points', MapPointViewSet)
 router.register(r'panoramas', PanoramaViewSet)
-router.register(r'markers', PanoramaMarkerViewSet)
+router.register(r'panorama_markers', PanoramaMarkerViewSet)
 
-urlpatterns = [
-    path('', include(router.urls)),
-]
+urlpatterns = router.urls
