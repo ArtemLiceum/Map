@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Редактор плана эвакуации{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1>Редактор плана эвакуации — добавление точек и панорам</h1>
+
+  <div class="row">
+    <div class="panel">
+      <h3>1) Загрузить план (карта здания)</h3>
+
+      <label for="planTitle">Название плана:</label>
+      <input id="planTitle" type="text" placeholder="Например: 1 этаж, корпус А" />
+
+      <label for="planUpload">Файл изображения:</label>
+      <input id="planUpload" type="file" accept="image/jpeg,image/png" />
+
+      <div class="hint">(JPG или PNG)</div>
+
+      <hr />
+      <h3>2) План — добавить метку</h3>
+      <div class="small">Клик по картинке добавит метку. Метки сохраняются в процентах от размеров изображения.</div>
+
+      <div id="planWrap" style="margin-top:12px;">
+        <img id="plan" src="" alt="План (загрузите изображение)" />
+      </div>
+    </div>
+
+    <div class="panel" style="max-width:360px">
+      <h3>Список точек</h3>
+      <div id="pointsList" class="small"></div>
+      <hr />
+      <h3>Инструкция</h3>
+      <ol class="small">
+        <li>Введите название и загрузите план.</li>
+        <li>Кликните по месту — задайте имя точки и (опционально) загрузите панораму.</li>
+        <li>Нажмите на маркер или кнопку в списке точек — откроется панорама; в ней можно добавить маркеры перехода.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка для точки -->
+<div id="pointModal" class="modal">
+  <div class="card">
+    <h3 id="pointModalTitle">Новая точка</h3>
+    <label>Название<input id="pointName" type="text" /></label>
+    <label>Панорама<input id="panoramaUpload" type="file" accept="image/jpeg,image/png" /></label>
+    <div class="modal-buttons">
+      <button id="savePointBtn" class="btn">Сохранить</button>
+      <button id="cancelPointBtn" class="btn gray">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка для панорамы -->
+<div id="panoramaModal" class="modal">
+  <div class="card wide">
+    <h3 id="panoramaTitle">Панорама</h3>
+    <div class="panorama-view" id="panoramaView"></div>
+    <div class="hint">Клик по панораме — добавит маркер перехода.</div>
+    <div class="modal-buttons">
+      <button id="closePanoramaBtn" class="btn">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Подключаем JS -->
+<script src="{% static 'js/admin.js' %}"></script>
+{% endblock %}
