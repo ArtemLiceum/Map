@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Редактор плана эвакуации{% endblock %}
+{% block title %}Редактор виртуального тура{% endblock %}
 
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
@@ -9,65 +9,146 @@
 
 {% block content %}
 <div class="container">
-  <h1>Редактор плана эвакуации — добавление точек и панорам</h1>
+  <header class="page-header">
+    <div>
+      <div class="eyebrow">Мастер создания тура</div>
+      <h1>План → Точки → Панорамы → Переходы → Проверка</h1>
+    </div>
+    <div id="statusBar" class="status-bar">Готово</div>
+  </header>
 
-  <div class="row">
-    <div class="panel">
-      <h3>1) Загрузить план (карта здания)</h3>
+  <nav class="stepper" id="stepper">
+    <button data-step="plan">1. План</button>
+    <button data-step="points">2. Точки</button>
+    <button data-step="panoramas">3. Панорамы</button>
+    <button data-step="transitions">4. Переходы</button>
+    <button data-step="verify">5. Проверка</button>
+  </nav>
 
-      <label for="planTitle">Название плана:</label>
-      <input id="planTitle" type="text" placeholder="Например: 1 этаж, корпус А" />
-
-      <label for="planUpload">Файл изображения:</label>
-      <input id="planUpload" type="file" accept="image/jpeg,image/png" />
-
-      <div class="hint">(JPG или PNG)</div>
-
-      <hr />
-      <h3>2) План — добавить метку</h3>
-      <div class="small">Клик по картинке добавит метку. Метки сохраняются в процентах от размеров изображения.</div>
-
-      <div id="planWrap" style="margin-top:12px;">
-        <img id="plan" src="" alt="План (загрузите изображение)" />
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="section">
+        <div class="section-header">
+          <h3>Планы</h3>
+          <button id="refreshPlansBtn" class="icon-btn" title="Обновить">⟳</button>
+        </div>
+        <input id="planSearch" type="text" placeholder="Поиск по названию" class="input" />
+        <div id="planList" class="list"></div>
       </div>
-    </div>
 
-    <div class="panel" style="max-width:360px">
-      <h3>Список точек</h3>
-      <div id="pointsList" class="small"></div>
-      <hr />
-      <h3>Инструкция</h3>
-      <ol class="small">
-        <li>Введите название и загрузите план.</li>
-        <li>Кликните по месту — задайте имя точки и (опционально) загрузите панораму.</li>
-        <li>Нажмите на маркер или кнопку в списке точек — откроется панорама; в ней можно добавить маркеры перехода.</li>
-      </ol>
-    </div>
-  </div>
-</div>
+      <div class="section">
+        <h4>Создать план</h4>
+        <label class="field">
+          <span>Название</span>
+          <input id="planTitle" type="text" placeholder="Например: 1 этаж, корпус А" class="input" />
+        </label>
+        <label class="field">
+          <span>Файл плана (JPG/PNG)</span>
+          <input id="planUpload" type="file" accept="image/jpeg,image/png" class="input" />
+        </label>
+        <button id="createPlanBtn" class="btn primary full">Создать план</button>
+      </div>
+    </aside>
 
-<!-- Модалка для точки -->
-<div id="pointModal" class="modal">
-  <div class="card">
-    <h3 id="pointModalTitle">Новая точка</h3>
-    <label>Название<input id="pointName" type="text" /></label>
-    <label>Панорама<input id="panoramaUpload" type="file" accept="image/jpeg,image/png" /></label>
-    <div class="modal-buttons">
-      <button id="savePointBtn" class="btn">Сохранить</button>
-      <button id="cancelPointBtn" class="btn gray">Отмена</button>
-    </div>
-  </div>
-</div>
+    <main class="workspace">
+      <div class="toolbar">
+        <div class="tools-group">
+          <span class="label">Режим</span>
+          <button data-tool="view" class="tool-btn">Просмотр</button>
+          <button data-tool="add-point" class="tool-btn">Добавить точку</button>
+          <button data-tool="add-transition" class="tool-btn">Добавить переход</button>
+        </div>
+        <div class="tools-group">
+          <span class="label">Активный план:</span>
+          <span id="activePlanTitle" class="pill">не выбран</span>
+        </div>
+      </div>
 
-<!-- Модалка для панорамы -->
-<div id="panoramaModal" class="modal">
-  <div class="card wide">
-    <h3 id="panoramaTitle">Панорама</h3>
-    <div class="panorama-view" id="panoramaView"></div>
-    <div class="hint">Клик по панораме — добавит маркер перехода.</div>
-    <div class="modal-buttons">
-      <button id="closePanoramaBtn" class="btn">Закрыть</button>
-    </div>
+      <div class="canvas">
+        <div id="planCanvas" class="canvas-layer">
+          <div class="canvas-title">План</div>
+          <div id="planWrap">
+            <img id="plan" src="" alt="План (выберите или создайте)" />
+          </div>
+        </div>
+
+        <div id="panoramaCanvas" class="canvas-layer hidden">
+          <div class="canvas-title">Панорама</div>
+          <div id="panoramaView" class="panorama-view"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="inspector" id="inspector">
+      <div class="section" id="inspectorPlan">
+        <div class="section-header">
+          <h3>План</h3>
+          <button id="deletePlanBtn" class="icon-btn danger" title="Удалить план">🗑️</button>
+        </div>
+        <div class="field">
+          <span>Название</span>
+          <input id="editPlanTitle" class="input" type="text" />
+        </div>
+        <div class="hint small">Сохраните, чтобы обновить название</div>
+        <button id="savePlanTitleBtn" class="btn secondary full">Сохранить название</button>
+      </div>
+
+      <div class="section" id="inspectorPoint">
+        <div class="section-header">
+          <h3>Точка</h3>
+          <button id="deletePointBtn" class="icon-btn danger" title="Удалить точку">🗑️</button>
+        </div>
+        <div class="field">
+          <span>Название</span>
+          <input id="pointNameInput" class="input" type="text" />
+        </div>
+        <div class="field inline">
+          <div>
+            <span>Коорд. X (%)</span>
+            <input id="pointX" class="input" type="number" step="0.01" disabled />
+          </div>
+          <div>
+            <span>Коорд. Y (%)</span>
+            <input id="pointY" class="input" type="number" step="0.01" disabled />
+          </div>
+        </div>
+        <button id="savePointBtn" class="btn secondary full">Сохранить точку</button>
+      </div>
+
+      <div class="section" id="inspectorPanorama">
+        <div class="section-header">
+          <h3>Панорама</h3>
+          <div class="actions">
+            <button id="deletePanoramaBtn" class="icon-btn danger" title="Удалить панораму">🗑️</button>
+          </div>
+        </div>
+        <div class="field">
+          <span>Файл панорамы (JPG/PNG)</span>
+          <input id="panoramaUpload" type="file" accept="image/jpeg,image/png" class="input" />
+        </div>
+        <button id="uploadPanoramaBtn" class="btn primary full">Загрузить / заменить</button>
+        <div class="hint small">Для выбора точка должна быть с панорамой</div>
+      </div>
+
+      <div class="section" id="inspectorTransitions">
+        <div class="section-header">
+          <h3>Переходы</h3>
+        </div>
+        <label class="field">
+          <span>Целевая точка</span>
+          <select id="targetPointSelect" class="input"></select>
+        </label>
+        <div class="hint small">Клик по панораме поставит маркер под выбранный azimuth</div>
+        <div id="markersList" class="list small"></div>
+      </div>
+
+      <div class="section" id="inspectorVerify">
+        <div class="section-header">
+          <h3>Проверка</h3>
+        </div>
+        <div id="verifyResults" class="list small"></div>
+      </div>
+    </aside>
   </div>
 </div>
 

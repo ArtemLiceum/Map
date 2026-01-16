@@ -37,6 +37,7 @@ class PanoramaMarker(models.Model):
     target_point = models.ForeignKey(MapPoint, on_delete=models.CASCADE)
     azimuth = models.FloatField(help_text="Угол (в градусах) направления на маркер")
     pitch = models.FloatField(help_text="Угол (в градусах) по вертикали")
+    # TODO: add information field
 
     def __str__(self):
         return f"{self.panorama.point.name} → {self.target_point.name}"

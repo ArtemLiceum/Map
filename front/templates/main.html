@@ -1,50 +1,37 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="container-fluid">
-        <div class="row">
-            <div class="col-1 col-sm-1 col-md-1 col-lg-1 col-xl-1" style="background-image:none;"></div>
-            <div class="col-10 col-sm-10 col-md-10 col-lg-10 col-xl-10" style="background-color: #ffffff; border-radius: 15px; box-shadow: 0 0 3px rgba(0,0,0,0.5);">
-                <div style="height: 20px;"></div>
-                    <div class="container">
-                        <div class="row">
-                            <div class="col-12 col-sm-12 col-md-12 col-lg-6 col-xl-6">
-                                <p><h5 style="color: #363636;">
-                                Мы рады приветствовать Вас на нашем виртуальном туре по факультету физики, математики и информатики Курского государственного университета. Независимо от того, являетесь ли Вы будущим студентом, родителем или просто интересующимся, здесь Вы сможете, не выходя из дома, познакомиться с аудиториями, лабораториями и учебными помещениями этих направлений. Погрузитесь в их атмосферу и узнайте обо всех уникальных особенностях!
-
-                                </p></h5>
-                            </div>
-                            <div class="col-6 col-sm-6 col-md-6 col-lg-3 col-xl-3">
-                                <div class="card h-100">
-                                <a href="place360/fulltur.html" class="body_cart">
-                                    <img src="/img/img_virttur1.jpg" height="200" class="card-img-top" alt="">
-                                    <div class="card-body">
-
-                                        <h5 class="card-title">3 этаж</h5>
-                                        <p class="card-text">Прогулка по аудиториям и лабораториям факультета физики, математики и информатики</p>
-
-                                    </div>
-                                </a>
-                                </div>
-                            </div>
-                            <div class="col-6 col-sm-6 col-md-6 col-lg-3 col-xl-3">
-                                <div class="card h-100">
-                                <a href="main_places.html" class="body_cart">
-                                    <img src="/img/img_virttur.jpg" height="200" class="card-img-top" alt="">
-                                    <div class="card-body">
-                                        <h5 class="card-title">4 этаж</h5>
-                                        <p class="card-text">Обзор ключевых аудиторий и лабораторий факультета физики, математики и информатики</p>
-
-                                    </div>
-                                </a>
-                                </div>
-                            </div>
+    <div class="row">
+        <div class="col-1 col-sm-1 col-md-1 col-lg-1 col-xl-1" style="background-image:none;"></div>
+        <div class="col-10 col-sm-10 col-md-10 col-lg-10 col-xl-10" style="background-color: #ffffff; border-radius: 15px; box-shadow: 0 0 3px rgba(0,0,0,0.5);">
+            <div style="height: 20px;"></div>
+            <div class="container">
+                <div class="row">
+                    <div class="col-12 col-lg-6">
+                        <h5 style="color: #363636; line-height: 1.5;">
+                            Мы рады приветствовать Вас на нашем виртуальном туре по факультету физики, математики и информатики Курского государственного университета. Независимо от того, являетесь ли Вы будущим студентом, родителем или просто интересующимся, здесь Вы сможете, не выходя из дома, познакомиться с аудиториями, лабораториями и учебными помещениями этих направлений.
+                        </h5>
+                        <p class="text-muted mb-0">
+                            Погрузитесь в атмосферу факультета и узнайте об уникальных особенностях каждой локации.
+                        </p>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="mb-0">Доступные туры</h5>
+                            <span id="toursStatus" class="text-muted small">Загрузка...</span>
+                        </div>
+                        <div class="row g-3" id="toursContainer">
+                            <div class="col-12 text-muted small">Подготавливаем список туров...</div>
                         </div>
                     </div>
-                <div style="height: 20px;"></div>
+                </div>
             </div>
-
-            <div class="col-1" style="background-image:none;"></div>
+            <div style="height: 20px;"></div>
         </div>
+        <div class="col-1" style="background-image:none;"></div>
+    </div>
 </div>
+<script src="{% static 'js/main.js' %}"></script>
 {% endblock %}
