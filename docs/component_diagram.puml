@@ -1,0 +1,64 @@
+@startuml
+' Component diagram for Map project
+skinparam componentStyle rectangle
+
+package "Django project (map_core)" {
+  [manage.py] as manage
+  component map_core
+  component wsgi_asgi <<entrypoint>>
+}
+
+package "Backend" {
+  component map_api <<Django app, REST API>> {
+    [ViewSets]
+    [Serializers]
+    [Models]
+  }
+  component admin_site <<Django Admin>>
+}
+
+package "Frontend" {
+  component front_app <<Django app, Templates/Static>> {
+    [Templates]
+    [Static (JS/CSS/Images)]
+  }
+}
+
+database "Database (Postgres/DB)" as DB
+folder "Media storage (MEDIA_ROOT)" as Media
+
+' External libraries
+component "Django REST Framework (DRF)" as DRF
+component "SimpleJWT / auth" as JWT
+component "drf-spectacular (OpenAPI)" as SPECT
+component "Whitenoise (static)" as WH
+
+' Relationships
+manage --> map_core : starts
+map_core --> front_app : routes ('')
+map_core --> map_api : routes ('api/')
+map_core --> admin_site : routes ('/admin')
+map_api --> DB : read/write
+map_api --> Media : serve/upload
+front_app --> Media : serve images
+front_app --> map_api : AJAX / Fetch (REST)
+admin_site --> DB : manage models
+map_api --> DRF
+map_api --> JWT
+map_api --> SPECT
+map_core --> WH
+
+' Models inside map_api (high-level)
+package "map_api.models" {
+  [EvacPlan]
+  [MapPoint]
+  [Panorama]
+  [PanoramaMarker]
+}
+
+MapPoint -down- EvacPlan : belongs to
+Panorama -right- MapPoint : one-to-one
+PanoramaMarker -down- Panorama : belongs to
+PanoramaMarker -left- MapPoint : target_point
+
+@enduml
