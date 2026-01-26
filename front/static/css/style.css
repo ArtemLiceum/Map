@@ -186,10 +186,10 @@ footer {
 /* ===== Горизонтальное меню ===== */
 .nav {
     list-style: none;
-    display: flex;                
-    justify-content: flex-start;      
+    display: flex;
+    justify-content: flex-start;
     align-items: center;
-    gap: 40px;                    
+    gap: 40px;
     margin: 0;
     padding: 10px 40px;
     font-family: "Calibri", "Poppins", "Segoe UI", sans-serif;
@@ -206,14 +206,27 @@ footer {
     font-size: 18px;
     font-weight: 500;
     padding: 8px 16px;
-    transition: background 0.3s, color 0.3s;
+    transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
     border-radius: 6px;
     font-family: "Calibri", "Poppins", "Segoe UI", sans-serif;
+    position: relative;
 }
 
 .nav-link:hover {
     background-color: #0083b2;
     color: #ffffff;
+}
+
+/* ===== Активная ссылка в навигации ===== */
+.nav-link.active {
+    background-color: #0083b2;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 131, 178, 0.4);
+    font-weight: 600;
+}
+
+.nav-link.active:hover {
+    background-color: #006d96;
 }
 
 /* ===== Основная область — колонки ===== */

@@ -31,27 +31,62 @@
 </div>
 
 <!-- ===== Навигация ===== -->
-<div class="container-fluid text-center">
+<nav class="container-fluid text-center" id="mainNav" aria-label="Основная навигация">
     <div class="row" style="background-color:#204d66; border-bottom-left-radius:10px; border-bottom-right-radius:10px;">
-        <div class="col-12">
-            <ul class="nav nav-pills mb-2 mx-5 mt-2">
+        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap px-4">
+            <!-- Основное меню -->
+            <ul class="nav nav-pills mb-2 mt-2">
                 <li class="nav-item mx-1">
-                    <a class="nav-link" href="{% url 'main' %}" style="color:#f2f6fd; background-color:#0083b2;">Главная</a>
+                    <a class="nav-link" href="{% url 'main' %}" data-nav-match="^/$">Главная</a>
                 </li>
                 <li class="nav-item mx-1">
-                    <a class="nav-link" href="faq.html" style="color:#f2f6fd;">FAQ</a>
+                    <a class="nav-link" href="{% url 'faq' %}" data-nav-match="^/faq/">FAQ</a>
                 </li>
                 <li class="nav-item mx-1">
-                    <a class="nav-link" href="{% url 'evac_plans' %}" style="color:#f2f6fd;">Редактор карт</a>
+                    <a class="nav-link" href="{% url 'evac_plans' %}" data-nav-match="^/evac_plans/">Планы этажей</a>
                 </li>
+                {% if user.is_authenticated and user.is_staff %}
+                <li class="nav-item mx-1">
+                    <a class="nav-link" href="{% url 'tour_editor' %}" data-nav-match="^/editor/">🔧 Редактор туров</a>
+                </li>
+                {% endif %}
+            </ul>
+
+            <!-- Блок авторизации -->
+            <ul class="nav nav-pills mb-2 mt-2">
+                {% if user.is_authenticated %}
+                <li class="nav-item mx-1 d-flex align-items-center">
+                    <span class="text-light me-2">
+                        👤 {{ user.username }}
+                        {% if user.is_staff %}<span class="badge bg-warning text-dark ms-1">Админ</span>{% endif %}
+                    </span>
+                </li>
+                <li class="nav-item mx-1">
+                    <form method="post" action="{% url 'logout' %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-link text-danger" style="background: none; border: 0;">
+                            Выйти
+                        </button>
+                    </form>
+                </li>
+                {% else %}
+                <li class="nav-item mx-1">
+                    <a class="nav-link" href="{% url 'login' %}" data-nav-match="^/login/">Войти</a>
+                </li>
+                <li class="nav-item mx-1">
+                    <a class="nav-link" href="{% url 'register' %}" data-nav-match="^/register/">Регистрация</a>
+                </li>
+                {% endif %}
             </ul>
         </div>
     </div>
-</div>
+</nav>
 
 <div class="container mt-4">
     {% block content %}{% endblock %}
 </div>
 
+<!-- Навигация: автоматическое выделение активного пункта -->
+<script src="{% static 'js/nav-active.js' %}"></script>
 </body>
 </html>

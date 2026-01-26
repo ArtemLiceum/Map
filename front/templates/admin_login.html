@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Вход в редактор{% endblock %}
+
+{% block extra_css %}
+<style>
+.login-container {
+    max-width: 400px;
+    margin: 60px auto;
+    padding: 40px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.12);
+}
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+.login-header h2 {
+    margin: 0 0 8px;
+    color: #0f172a;
+    font-size: 24px;
+}
+.login-header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 14px;
+}
+.login-form .field {
+    margin-bottom: 20px;
+}
+.login-form label {
+    display: block;
+    margin-bottom: 6px;
+    color: #334155;
+    font-weight: 500;
+    font-size: 14px;
+}
+.login-form input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 15px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.login-form input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.login-form button {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+}
+.login-form button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.login-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+.login-info {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+}
+.login-info a {
+    color: #2563eb;
+    text-decoration: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-header">
+        <h2>🔐 Вход в редактор</h2>
+        <p>Только для администраторов</p>
+    </div>
+
+    <form method="post" class="login-form" action="{% url 'login' %}">
+        {% csrf_token %}
+
+        {% if form.errors %}
+        <div class="login-error">
+            Неверное имя пользователя или пароль
+        </div>
+        {% endif %}
+
+        <div class="field">
+            <label for="id_username">Имя пользователя</label>
+            <input type="text" name="username" id="id_username" autofocus required>
+        </div>
+
+        <div class="field">
+            <label for="id_password">Пароль</label>
+            <input type="password" name="password" id="id_password" required>
+        </div>
+
+        <input type="hidden" name="next" value="{% url 'tour_editor' %}">
+
+        <button type="submit">Войти</button>
+    </form>
+
+    <div class="login-info">
+        <a href="{% url 'main' %}">← Вернуться на главную</a>
+    </div>
+</div>
+{% endblock %}

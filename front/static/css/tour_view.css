@@ -43,24 +43,49 @@
 
 .tv-nav-marker {
   position: absolute;
-  top: 45%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  padding: 8px 10px;
-  background: rgba(17, 24, 39, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  background: rgba(17, 24, 39, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
   color: #fff;
-  font-size: 12px;
-  white-space: nowrap;
+  font-size: 0;
   pointer-events: auto;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Arrow icon via pseudo-element */
+.tv-nav-marker::before {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: auto;
+  border-top: 3px solid #fff;
+  border-right: 3px solid #fff;
+  transform: rotate(-45deg) translateY(3px);
+  opacity: 0.9;
 }
 
 .tv-nav-marker:hover {
-  transform: translate(-50%, -50%) scale(1.04);
-  border-color: rgba(255, 255, 255, 0.55);
-  background: rgba(17, 24, 39, 0.92);
+  transform: translate(-50%, -50%) scale(1.12);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(37, 99, 235, 0.85);
+  box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
+}
+
+.tv-nav-marker:hover::before {
+  opacity: 1;
+}
+
+.tv-nav-marker:active {
+  transform: translate(-50%, -50%) scale(0.95);
 }
 
 .tv-loader {
@@ -198,8 +223,13 @@
     height: 180px;
   }
   .tv-nav-marker {
-    font-size: 11px;
-    padding: 6px 8px;
+    width: 40px;
+    height: 40px;
+  }
+  .tv-nav-marker::before {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
   }
   .tv-back {
     top: 10px;

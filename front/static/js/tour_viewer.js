@@ -12,6 +12,8 @@
   const minimapToggleEl = document.getElementById('tvMinimapToggle');
   const panoramaContainer = document.getElementById('tvPanorama');
 
+  const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
+
   const state = {
     plan: null,
     points: [],
@@ -23,6 +25,9 @@
     offsetPx: 0,
     velocity: 0,
     isDragging: false,
+    dragStartX: 0,      // pointer position at drag start
+    dragStartY: 0,
+    hasMoved: false,    // true if pointer moved beyond threshold
     lastX: 0,
     lastT: 0,
     rafPending: false,
@@ -108,8 +113,10 @@
       const el = document.createElement('button');
       el.className = 'tv-nav-marker';
       el.type = 'button';
-      el.textContent = m.target_point_name || 'Переход';
-      el.addEventListener('click', () => switchToPoint(m.target_point));
+      el.title = m.target_point_name || 'Переход';
+      el.setAttribute('aria-label', m.target_point_name || 'Переход');
+      // Click handled separately to avoid drag interference
+      el.dataset.targetPoint = String(m.target_point);
       markersLayer.appendChild(el);
       return { data: m, el };
     });
@@ -168,17 +175,34 @@
   }
 
   function onPointerDown(e) {
+    // Ignore if clicking on a nav marker — let click event handle it
+    if (e.target.closest('.tv-nav-marker')) return;
+
     state.isDragging = true;
+    state.dragStartX = e.clientX;
+    state.dragStartY = e.clientY;
+    state.hasMoved = false;
     state.lastX = e.clientX;
     state.lastT = performance.now();
+    state.velocity = 0;
     stopInertia();
     panoramaContainer.setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e) {
     if (!state.isDragging) return;
-    const now = performance.now();
+
     const dx = e.clientX - state.lastX;
+    const totalDx = Math.abs(e.clientX - state.dragStartX);
+    const totalDy = Math.abs(e.clientY - state.dragStartY);
+
+    // Only start actual panning if moved beyond threshold
+    if (!state.hasMoved && totalDx < DRAG_THRESHOLD && totalDy < DRAG_THRESHOLD) {
+      return;
+    }
+    state.hasMoved = true;
+
+    const now = performance.now();
     state.offsetPx = state.offsetPx - dx;
     const dt = now - state.lastT || 1;
     state.velocity = -(dx / dt) * 16; // px per frame approximation
@@ -191,7 +215,12 @@
     if (!state.isDragging) return;
     state.isDragging = false;
     try { panoramaContainer.releasePointerCapture(e.pointerId); } catch (_) {}
-    startInertia();
+
+    // Only start inertia if user actually dragged
+    if (state.hasMoved) {
+      startInertia();
+    }
+    state.hasMoved = false;
   }
 
   function startInertia() {
@@ -265,6 +294,16 @@
     panoramaContainer.addEventListener('pointerup', onPointerUp);
     panoramaContainer.addEventListener('pointercancel', onPointerUp);
     window.addEventListener('resize', onResize);
+
+    // Delegated click handler for nav markers
+    markersLayer.addEventListener('click', (e) => {
+      const marker = e.target.closest('.tv-nav-marker');
+      if (!marker) return;
+      const targetId = Number(marker.dataset.targetPoint);
+      if (targetId) {
+        switchToPoint(targetId);
+      }
+    });
 
     minimapToggleEl.addEventListener('click', () => {
       const hidden = minimapEl.classList.toggle('hidden');

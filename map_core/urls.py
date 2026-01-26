@@ -15,18 +15,32 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import path, include
-from front.views import main, admin, evac_plans, tour_view
+from django.contrib import admin as django_admin
+from front.views import main, tour_editor, evac_plans, faq, tour_view, admin_login, register_view, login_view
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.auth import views as auth_views
 
 
 urlpatterns = [
+    # Django admin
+    path('django-admin/', django_admin.site.urls),
+
+    # API
     path('api/', include('map_api.urls')),
+
+    # Frontend pages
     path('', main, name='main'),
-    path('admin/', admin, name='admin'),
+    path('editor/', tour_editor, name='tour_editor'),
     path('evac_plans/', evac_plans, name='evac_plans'),
+    path('faq/', faq, name='faq'),
     path('tour/<int:plan_id>/', tour_view, name='tour_view'),
 
+    # Auth
+    path('admin-login/', admin_login, name='admin_login'),
+    path('login/', login_view, name='login'),
+    path('register/', register_view, name='register'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
