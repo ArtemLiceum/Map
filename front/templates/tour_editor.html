@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Редактор виртуального тура{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/tour_editor.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="editor-container">
+    <!-- Header -->
+    <header class="editor-header">
+        <div class="header-left">
+            <div class="eyebrow">Мастер создания тура</div>
+            <h1>Редактор виртуального тура</h1>
+        </div>
+        <div class="header-right">
+            <div id="statusBar" class="status-bar status-ready">
+                <span class="status-icon">✓</span>
+                <span class="status-text">Готово</span>
+            </div>
+            <div class="user-info">
+                <span>{{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="logout-btn" title="Выйти">⎋</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Step Navigation -->
+    <nav class="stepper" id="stepper">
+        <button class="step-btn active" data-step="1">
+            <span class="step-num">1</span>
+            <span class="step-label">Планы этажей</span>
+        </button>
+        <div class="step-connector"></div>
+        <button class="step-btn" data-step="2">
+            <span class="step-num">2</span>
+            <span class="step-label">Точки на плане</span>
+        </button>
+        <div class="step-connector"></div>
+        <button class="step-btn" data-step="3">
+            <span class="step-num">3</span>
+            <span class="step-label">Панорамы</span>
+        </button>
+        <div class="step-connector"></div>
+        <button class="step-btn" data-step="4">
+            <span class="step-num">4</span>
+            <span class="step-label">Переходы</span>
+        </button>
+    </nav>
+
+    <!-- Step Hint -->
+    <div class="step-hint" id="stepHint">
+        <div class="hint-icon">💡</div>
+        <div class="hint-text" id="hintText">Выберите существующий план или создайте новый для начала работы.</div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="editor-layout">
+        <!-- Left Sidebar -->
+        <aside class="sidebar" id="leftSidebar">
+            <!-- Step 1: Plans List -->
+            <div class="sidebar-section" id="plansSection">
+                <div class="section-header">
+                    <h3>📋 Планы этажей</h3>
+                    <button id="refreshPlansBtn" class="icon-btn" title="Обновить список">⟳</button>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="planSearch" placeholder="Поиск по названию / этажу..." class="search-input">
+                </div>
+                <div id="planList" class="items-list"></div>
+
+                <div class="create-form">
+                    <h4>Создать план</h4>
+                    <div class="form-field">
+                        <label>Этаж</label>
+                        <input type="number" id="planFloor" class="input" value="1" min="0">
+                    </div>
+                    <div class="form-field">
+                        <label>Название</label>
+                        <input type="text" id="planTitle" class="input" placeholder="Корпус А — 2 этаж">
+                    </div>
+                    <div class="form-field">
+                        <label>Изображение плана</label>
+                        {# FIX: уникальный id, иначе JS/CSS путают <input> и <img> с одинаковым id="planImage" #}
+                        <input type="file" id="planImageFile" class="input" accept="image/jpeg,image/png">
+                    </div>
+                    <button id="createPlanBtn" class="btn primary full">Создать план</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Points List -->
+            <div class="sidebar-section hidden" id="pointsSection">
+                <div class="section-header">
+                    <h3>📍 Точки на плане</h3>
+                </div>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="view">👁 Просмотр</button>
+                    <button class="mode-btn" data-mode="add">➕ Добавить</button>
+                </div>
+                <div id="addPointPanel" class="add-panel hidden">
+                    <div class="form-field">
+                        <label>Тип точки</label>
+                        <select id="newPointType" class="input">
+                            <option value="transition">🚪 Переходная (панорама)</option>
+                        </select>
+                    </div>
+                    <p class="hint">Кликните на план, чтобы добавить точку</p>
+                </div>
+                <div id="pointsList" class="items-list"></div>
+            </div>
+
+            <!-- Step 3: Panoramas -->
+            <div class="sidebar-section hidden" id="panoramasSection">
+                <div class="section-header">
+                    <h3>🌐 Панорамы</h3>
+                </div>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="view">👁 Просмотр</button>
+                    <button class="mode-btn" data-mode="add">➕ Метка перехода</button>
+                </div>
+                <div id="addPanoramaMarkerPanel" class="add-panel hidden">
+                    <div class="form-field">
+                        <label>Что добавить</label>
+                        <select id="panoramaAddType" class="input">
+                            <option value="transition">→ Маркер перехода</option>
+                            <option value="info">ℹ️ Инфо-точка</option>
+                        </select>
+                    </div>
+                    <p class="hint">Кликните на панораму, чтобы добавить выбранный элемент</p>
+                </div>
+                <p class="hint">Выберите переходную точку, чтобы загрузить/заменить панораму и расставить метки переходов.</p>
+                <div id="panoramasList" class="items-list"></div>
+            </div>
+
+            <!-- Step 4: Transitions -->
+            <div class="sidebar-section hidden" id="transitionsSection">
+                <div class="section-header">
+                    <h3>🔗 Переходы</h3>
+                </div>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="view">👁 Просмотр</button>
+                    <button class="mode-btn" data-mode="add">➕ Добавить</button>
+                </div>
+                <div id="addTransitionPanel" class="add-panel hidden">
+                    <div class="form-field">
+                        <label>Целевая точка</label>
+                        <select id="targetPointSelect" class="input"></select>
+                    </div>
+                    <p class="hint">Кликните на панораму, чтобы поставить маркер</p>
+                </div>
+                <div id="markersList" class="items-list"></div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Plan Canvas -->
+            <div id="planCanvas" class="canvas-container">
+                <div class="canvas-placeholder" id="canvasPlaceholder">
+                    <div class="placeholder-icon">🗺️</div>
+                    <div class="placeholder-text">Выберите или создайте план этажа</div>
+                </div>
+                <div id="planWrapper" class="plan-wrapper hidden">
+                    {# FIX: оверлей точек должен быть привязан к размерам изображения, а не к wrapper с padding/центровкой #}
+                    <div id="planInner" class="plan-inner">
+                        <img id="planImage" src="" alt="План этажа" draggable="false">
+                        <div id="pointsLayer" class="points-layer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panorama Canvas -->
+            <div id="panoramaCanvas" class="canvas-container hidden">
+                <div class="panorama-viewer" id="panoramaViewer">
+                    <div class="panorama-placeholder" id="panoramaPlaceholder">
+                        <div class="placeholder-icon">🌐</div>
+                        <div class="placeholder-text">Выберите точку с панорамой</div>
+                    </div>
+                    <div id="panoramaWrapper" class="panorama-wrapper hidden">
+                        {# FIX: маркеры должны скроллиться вместе с изображением (поэтому они в общем relative-контейнере) #}
+                        <div id="panoramaInner" class="panorama-inner">
+                            <img id="panoramaImage" src="" alt="Панорама 360°" draggable="false">
+                            <div id="markersLayer" class="markers-layer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Inspector -->
+        <aside class="inspector" id="rightInspector">
+            <!-- Plan Inspector -->
+            <div class="inspector-section" id="planInspector">
+                <div class="section-header">
+                    <h3>📋 План</h3>
+                    <button id="deletePlanBtn" class="icon-btn danger" title="Удалить план">🗑️</button>
+                </div>
+                <div class="form-field">
+                    <label>Название</label>
+                    <input type="text" id="editPlanTitle" class="input">
+                </div>
+                <div class="form-field">
+                    <label>Этаж</label>
+                    <input type="number" id="editPlanFloor" class="input">
+                </div>
+                <button id="savePlanBtn" class="btn secondary full">Сохранить изменения</button>
+            </div>
+
+            <!-- Point Inspector -->
+            <div class="inspector-section hidden" id="pointInspector">
+                <div class="section-header">
+                    <h3>📍 Точка</h3>
+                    <button id="deletePointBtn" class="icon-btn danger" title="Удалить точку">🗑️</button>
+                </div>
+                <div class="form-field">
+                    <label>Название</label>
+                    <input type="text" id="editPointName" class="input">
+                </div>
+                <div class="form-field">
+                    <label>Тип</label>
+                    <input type="text" id="editPointType" class="input" readonly>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>X (%)</label>
+                        <input type="number" id="editPointX" class="input" step="0.01" readonly>
+                    </div>
+                    <div class="form-field">
+                        <label>Y (%)</label>
+                        <input type="number" id="editPointY" class="input" step="0.01" readonly>
+                    </div>
+                </div>
+                <div class="form-field" id="infoTextField">
+                    <label>Информационный текст</label>
+                    <textarea id="editInfoText" class="input textarea" rows="3" placeholder="Текст для отображения при наведении..."></textarea>
+                </div>
+                <button id="savePointBtn" class="btn secondary full">Сохранить точку</button>
+            </div>
+
+            <!-- Panorama Inspector -->
+            <div class="inspector-section hidden" id="panoramaInspector">
+                <div class="section-header">
+                    <h3>🌐 Панорама</h3>
+                    <button id="deletePanoramaBtn" class="icon-btn danger" title="Удалить панораму">🗑️</button>
+                </div>
+                <div class="panorama-preview" id="panoramaPreview">
+                    <div class="preview-placeholder">Нет панорамы</div>
+                </div>
+                <div class="form-field">
+                    <label>Загрузить панораму (360°)</label>
+                    <input type="file" id="panoramaUpload" class="input" accept="image/jpeg,image/png">
+                </div>
+                <div class="preview-area hidden" id="uploadPreview">
+                    <img id="previewImage" src="" alt="Предпросмотр">
+                </div>
+                <button id="uploadPanoramaBtn" class="btn primary full">Загрузить / Заменить</button>
+            </div>
+
+            <!-- Marker Inspector -->
+            <div class="inspector-section hidden" id="markerInspector">
+                <div class="section-header">
+                    <h3>🔗 Маркер перехода</h3>
+                    <button id="deleteMarkerBtn" class="icon-btn danger" title="Удалить маркер">🗑️</button>
+                </div>
+                <div class="form-field">
+                    <label>Подпись</label>
+                    <input type="text" id="editMarkerLabel" class="input" placeholder="Например: В коридор">
+                </div>
+                <div class="form-field">
+                    <label>Целевая точка</label>
+                    <select id="editMarkerTarget" class="input"></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Azimuth (°)</label>
+                        <input type="number" id="editMarkerAzimuth" class="input" step="0.01" min="0" max="360">
+                    </div>
+                    <div class="form-field">
+                        <label>Pitch (°)</label>
+                        <input type="number" id="editMarkerPitch" class="input" step="0.01" min="-90" max="90">
+                    </div>
+                </div>
+                <button id="saveMarkerBtn" class="btn secondary full">Сохранить маркер</button>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Modal for creating marker -->
+<div id="markerModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+        <h3>Создать переход</h3>
+        <div class="form-field">
+            <label>Целевая точка</label>
+            <select id="modalTargetPointSelect" class="input"></select>
+        </div>
+        <div class="form-field">
+            <label>Подпись перехода</label>
+            <input type="text" id="newMarkerLabel" class="input" placeholder="Например: В коридор">
+        </div>
+        <div class="modal-info">
+            <div>Azimuth: <span id="modalAzimuth">0</span>°</div>
+            <div>Pitch: <span id="modalPitch">0</span>°</div>
+        </div>
+        <div class="modal-actions">
+            <button id="cancelMarkerBtn" class="btn secondary">Отмена</button>
+            <button id="confirmMarkerBtn" class="btn primary">Создать</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tooltip for info points -->
+<div id="infoTooltip" class="info-tooltip hidden"></div>
+
+<!-- Context menu for panorama markers/info-points -->
+<div id="panoContextMenu" class="context-menu hidden" role="menu" aria-hidden="true">
+    <button type="button" class="context-menu-item danger" data-action="delete">Удалить</button>
+    <button type="button" class="context-menu-item" data-action="close">Отмена</button>
+</div>
+
+<script src="{% static 'js/tour_editor.js' %}"></script>
+{% endblock %}

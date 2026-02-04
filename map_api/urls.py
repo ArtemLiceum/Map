@@ -2,7 +2,7 @@
 from rest_framework.routers import DefaultRouter
 from .views import (
     EvacPlanViewSet, MapPointViewSet,
-    PanoramaViewSet, PanoramaMarkerViewSet
+    PanoramaViewSet, PanoramaMarkerViewSet, PanoramaInfoPointViewSet
 )
 
 router = DefaultRouter()
@@ -10,5 +10,6 @@ router.register(r'evac_plans', EvacPlanViewSet)
 router.register(r'map_points', MapPointViewSet)
 router.register(r'panoramas', PanoramaViewSet)
 router.register(r'panorama_markers', PanoramaMarkerViewSet)
+router.register(r'panorama_info_points', PanoramaInfoPointViewSet)
 
 urlpatterns = router.urls
