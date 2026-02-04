@@ -23,7 +23,24 @@
                             <span id="toursStatus" class="text-muted small">Загрузка...</span>
                         </div>
                         <div class="row g-3" id="toursContainer">
-                            <div class="col-12 text-muted small">Подготавливаем список туров...</div>
+                            {% for plan in plans %}
+                                <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                                    <a class="card h-100 shadow-sm tour-card text-decoration-none" href="{% url 'tour_view' plan.id %}">
+                                        {% if plan.image %}
+                                            <img src="{{ plan.image.url }}" alt="{{ plan.title }}" class="card-img-top" style="height: 180px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="card-img-top bg-light d-flex align-items-center justify-content-center text-muted" style="height: 180px;">
+                                                Нет изображения
+                                            </div>
+                                        {% endif %}
+                                        <div class="card-body">
+                                            <h6 class="card-title mb-1 text-dark">{{ plan.title }}</h6>
+                                        </div>
+                                    </a>
+                                </div>
+                            {% empty %}
+                                <div class="col-12 text-muted small">Туры пока не добавлены.</div>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>

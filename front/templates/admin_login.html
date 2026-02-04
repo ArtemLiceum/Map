@@ -98,7 +98,7 @@
         <p>Только для администраторов</p>
     </div>
 
-    <form method="post" class="login-form" action="{% url 'login' %}">
+    <form method="post" class="login-form" action="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% else %}?next={% url 'admin' %}{% endif %}">
         {% csrf_token %}
 
         {% if form.errors %}
@@ -116,8 +116,6 @@
             <label for="id_password">Пароль</label>
             <input type="password" name="password" id="id_password" required>
         </div>
-
-        <input type="hidden" name="next" value="{% url 'tour_editor' %}">
 
         <button type="submit">Войти</button>
     </form>

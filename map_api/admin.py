@@ -39,16 +39,20 @@ class MapPointAdmin(admin.ModelAdmin):
 
 @admin.register(Panorama)
 class PanoramaAdmin(admin.ModelAdmin):
-    list_display = ('point', 'get_point_plan')
-    inlines = [PanoramaMarkerInline]
-
-    @admin.display(description='План')
-    def get_point_plan(self, obj):
-        return obj.point.plan.title
+    # list_display = ('point', 'get_point_plan')
+    # inlines = [PanoramaMarkerInline, PanoramaInfoPointInline]
+    pass
 
 
 @admin.register(PanoramaMarker)
 class PanoramaMarkerAdmin(admin.ModelAdmin):
-    list_display = ('panorama', 'target_point', 'label', 'azimuth', 'pitch')
+    # list_display = ('panorama', 'target_point', 'label', 'azimuth', 'pitch')
     list_filter = ('panorama__point__plan',)
-    search_fields = ('label', 'panorama__point__name', 'target_point__name')
+    # search_fields = ('label', 'panorama__point__name', 'target_point__name')
+
+
+# @admin.register(PanoramaInfoPoint)
+# class PanoramaInfoPointAdmin(admin.ModelAdmin):
+#     list_display = ('panorama', 'title', 'azimuth', 'pitch')
+#     list_filter = ('panorama__point__plan',)
+#     search_fields = ('title', 'text', 'panorama__point__name')

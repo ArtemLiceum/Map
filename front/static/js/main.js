@@ -59,11 +59,6 @@ function renderTours(tours) {
     title.textContent = tour.title || 'Без названия';
     body.appendChild(title);
 
-    const meta = document.createElement('p');
-    meta.className = 'card-text text-muted small mb-0';
-    meta.textContent = `ID: ${tour.id ?? '—'}`;
-    body.appendChild(meta);
-
     card.appendChild(body);
     card.addEventListener('click', () => {
       if (tour.id == null) return;

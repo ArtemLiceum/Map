@@ -4,6 +4,7 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib import messages
 from django.http import HttpResponseForbidden
+from map_api.models import EvacPlan
 
 # Navigation template tags: front.templatetags.nav_tags
 
@@ -14,19 +15,8 @@ def is_admin(user):
 
 
 def main(request):
-    return render(request, "main.html")
-
-
-@login_required
-@user_passes_test(is_admin, login_url='/admin-login/')
-def tour_editor(request):
-    """
-    Мастер-редактор виртуального тура.
-    Доступен только для пользователей с ролью admin (is_staff=True).
-    """
-    return render(request, "tour_editor.html", {
-        'user': request.user
-    })
+    plans = EvacPlan.objects.all()
+    return render(request, "main.html", {"plans": plans})
 
 
 def evac_plans(request):
@@ -41,11 +31,16 @@ def tour_view(request, plan_id: int):
     # Render viewer; JS will pull data via API using plan_id.
     return render(request, "tour_view.html", {"plan_id": plan_id})
 
+# Редактор (только для staff)
+@user_passes_test(is_admin, login_url='admin_login')
+def admin_editor(request):
+    return render(request, "admin.html")
 
+# TODO: redirect to admin panel
 def admin_login(request):
     """Страница входа для администраторов"""
     if request.user.is_authenticated and request.user.is_staff:
-        return redirect('tour_editor')
+        return redirect('admin')
     return render(request, "admin_login.html")
 
 
