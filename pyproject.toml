@@ -1,9 +1,23 @@
 [tool.poetry]
 name = "map"
-version = "0.1.0"
-description = ""
-authors = ["GMCS\\abedin <'abedin@gmcs.ru'>"]
+version = "0.0.9"
+description = "Interactive virtual tours system for university buildings with panoramic images and evacuation plans"
+authors = ["Artem Bedin <abedin@gmcs.ru>"]
 readme = "README.md"
+homepage = "https://github.com/username/map"
+repository = "https://github.com/username/map"
+keywords = ["django", "virtual-tours", "panoramic-images", "evacuation-plans", "university"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Multimedia :: Graphics",
+]
 
 [tool.poetry.dependencies]
 python = "^3.13"
@@ -16,6 +30,8 @@ django-fernet-encrypted-fields = "^0.3.0"
 drf-spectacular = "^0.28.0"
 psycopg2 = "^2.9.10"
 django-filter = "^25.1"
+pillow = "^11.3.0"
+python-dotenv = "^1.1.1"
 
 
 [build-system]

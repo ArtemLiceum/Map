@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Планы эвакуации{% endblock %}
+
+{% block extra_css %}
+<style>
+.cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: flex-start;
+}
+.card-evac {
+    width: 250px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    position: relative;
+}
+.card-evac:hover { transform: scale(1.03); }
+.card-evac img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+.card-body {
+    padding: 12px;
+    text-align: center;
+}
+.card-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+.card-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #555;
+    background: #f2f2f2;
+    height: 150px;
+}
+.delete-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(255,0,0,0.8);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.delete-btn:hover { background: rgba(255,0,0,1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Планы эвакуации</h1>
+<div class="cards" id="plansContainer">
+    <!-- Пустая карточка "Создать новый план" -->
+    <div class="card-evac" onclick="window.location.href='/admin/?new=1'">
+        <div class="card-empty">➕ Создать новый план</div>
+    </div>
+</div>
+
+<script>
+const plansContainer = document.getElementById('plansContainer');
+
+async function fetchPlans() {
+    try {
+        const res = await fetch('/api/evac_plans/');
+        if (!res.ok) throw new Error('Ошибка получения планов');
+        const plans = await res.json();
+        renderPlans(plans);
+    } catch (e) {
+        console.error(e);
+        plansContainer.innerHTML += '<p>Не удалось загрузить планы.</p>';
+    }
+}
+
+function renderPlans(plans) {
+    plans.forEach(plan => {
+        const card = document.createElement('div');
+        card.className = 'card-evac';
+        card.innerHTML = `
+            <img src="${plan.image}" alt="${plan.title}">
+            <div class="card-body">
+                <div class="card-title">${plan.title}</div>
+            </div>
+            <button class="delete-btn">🗑️</button>
+        `;
+
+        // Переход на admin при клике на карточку (кроме кнопки удаления)
+        card.addEventListener('click', e => {
+            if (e.target.classList.contains('delete-btn')) return;
+            window.location.href = `/admin/?plan=${plan.id}`;
+        });
+
+        // Удаление плана
+        card.querySelector('.delete-btn').addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm(`Удалить план "${plan.title}"?`)) return;
+            try {
+                const res = await fetch(`/api/evac_plans/${plan.id}/`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Ошибка удаления плана');
+                card.remove();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        plansContainer.appendChild(card);
+    });
+}
+
+fetchPlans();
+</script>
+{% endblock %}

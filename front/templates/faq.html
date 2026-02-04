@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}FAQ — Виртуальный тур{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-1"></div>
+        <div class="col-10" style="background-color: #ffffff; border-radius: 15px; box-shadow: 0 0 3px rgba(0,0,0,0.5);">
+            <div style="height: 20px;"></div>
+            <div class="container">
+                <h2 class="mb-4">Часто задаваемые вопросы</h2>
+
+                <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1" aria-expanded="true">
+                                Что такое виртуальный тур?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Виртуальный тур — это интерактивная панорамная экскурсия по территории и помещениям университета.
+                                Вы можете осматривать локации в формате 360°, перемещаться между точками и изучать план здания.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                Как управлять панорамой?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>Зажмите левую кнопку мыши и перемещайте курсор для вращения обзора</li>
+                                    <li>Используйте колёсико мыши для приближения/отдаления</li>
+                                    <li>Кликайте по маркерам переходов для перемещения между точками</li>
+                                    <li>Используйте мини-карту для навигации по плану</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                Как создать новый тур?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Перейдите в раздел «Редактор карт», создайте план, добавьте точки и загрузите панорамы.
+                                После этого настройте переходы между точками и проверьте результат.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                Какие форматы изображений поддерживаются?
+                            </button>
+                        </h2>
+                        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Для планов и панорам поддерживаются форматы JPEG и PNG.
+                                Рекомендуемое разрешение панорам — 4096×2048 пикселей или выше для лучшего качества.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="height: 20px;"></div>
+        </div>
+        <div class="col-1"></div>
+    </div>
+</div>
+{% endblock %}
