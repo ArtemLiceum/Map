@@ -21,9 +21,10 @@
 #### 2. map_api (Django приложение - REST API)
 - **Назначение**: Backend API для управления данными виртуальных туров
 - **Ключевые файлы**:
-  - `map_api/models.py` — модели данных (EvacPlan, MapPoint, Panorama, PanoramaMarker)
-  - `map_api/views.py` — ViewSet'ы для CRUD операций
-  - `map_api/serializers.py` — сериализаторы для API responses/requests
+  - `map_api/models.py` — модели данных (EvacPlan с floor, MapPoint с info_text, Panorama, PanoramaMarker с type/label/text)
+  - `map_api/views.py` — ViewSet'ы для CRUD операций (AdminOnlyViewSetMixin)
+  - `map_api/serializers.py` — сериализаторы для API
+  - `map_api/utils.py` — утилиты обрезки изображений (apply_crop, parse_crop_data)
   - `map_api/urls.py` — маршруты API endpoints
 - **Особенности**:
   - Полный REST API с nested relationships
@@ -34,10 +35,11 @@
 #### 3. front (Django приложение - Frontend)
 - **Назначение**: Пользовательский интерфейс и клиентская логика
 - **Ключевые файлы**:
-  - `front/views.py` — Django views для серверных страниц
-  - `front/templates/` — HTML шаблоны (main.html, admin.html, evac_plans.html)
-  - `front/static/js/admin.js` — клиентская логика редактора туров
-  - `front/static/css/style_admin.css` — стили интерфейса
+  - `front/views.py` — Django views (main, evac_plans, faq, tour_view, admin_editor, admin_login, login, register)
+  - `front/templates/` — HTML шаблоны (main.html, admin.html, admin_login.html, tour_view.html, evac_plans.html)
+  - `front/static/js/admin.js` — логика редактора туров
+  - `front/static/js/tour_viewer.js` — просмотр тура
+  - `front/static/css/style_admin.css`, `tour_view.css` — стили
 - **Особенности**:
   - Пошаговый мастер создания туров (Wizard UI)
   - Интерактивный canvas для планов и панорам

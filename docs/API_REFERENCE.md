@@ -74,8 +74,10 @@ GET /api/evac_plans/
 **Параметры запроса:**
 - `page` (int) - номер страницы
 - `page_size` (int) - размер страницы (по умолчанию 10)
+- `search` (string) - поиск по названию или этажу
+- `floor` (int) - фильтр по этажу
 
-**Пример ответа:**
+**Пример ответа (list):**
 ```json
 {
   "count": 2,
@@ -85,21 +87,35 @@ GET /api/evac_plans/
     {
       "id": 1,
       "title": "1 этаж, корпус А",
+      "floor": 1,
       "image": "/media/evac_plans/plan1.jpg",
-      "created_at": "2024-01-15T10:30:00Z",
-      "points": [
-        {
-          "id": 1,
-          "name": "Вход",
-          "x": 25.5,
-          "y": 75.2,
-          "panorama": {
-            "id": 1,
-            "image": "/media/panoramas/pano1.jpg",
-            "markers": []
-          }
-        }
-      ]
+      "points_count": 5,
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+**Детали плана (GET /api/evac_plans/{id}/) включают вложенные `points`:**
+```json
+{
+  "id": 1,
+  "title": "1 этаж, корпус А",
+  "floor": 1,
+  "image": "/media/evac_plans/plan1.jpg",
+  "created_at": "2024-01-15T10:30:00Z",
+  "points": [
+    {
+      "id": 1,
+      "name": "Вход",
+      "x": 25.5,
+      "y": 75.2,
+      "info_text": "",
+      "panorama": {
+        "id": 1,
+        "image": "/media/panoramas/pano1.jpg",
+        "markers": []
+      }
     }
   ]
 }
@@ -113,13 +129,16 @@ Content-Type: multipart/form-data
 
 **Параметры формы:**
 - `title` (string, required) - название плана
-- `image` (file, required) - изображение плана (JPG/PNG)
+- `floor` (int, optional) - номер этажа (по умолчанию 1)
+- `image` (file, required) - изображение плана (JPG/PNG/WebP)
+- `crop` (string, optional) - JSON с данными обрезки `{"x":0,"y":0,"width":1000,"height":600,"rotate":0,"scaleX":1,"scaleY":1}`
 
 **Пример ответа:**
 ```json
 {
   "id": 3,
   "title": "2 этаж, корпус Б",
+  "floor": 2,
   "image": "/media/evac_plans/plan3.jpg",
   "created_at": "2024-01-20T14:15:00Z"
 }
@@ -133,11 +152,14 @@ GET /api/evac_plans/{id}/
 #### Обновить план
 ```http
 PATCH /api/evac_plans/{id}/
-Content-Type: application/json
+Content-Type: multipart/form-data
 ```
 
 **Параметры:**
 - `title` (string, optional) - новое название
+- `floor` (int, optional) - номер этажа
+- `image` (file, optional) - новое изображение (JPG/PNG/WebP)
+- `crop` (string, optional) - JSON с данными обрезки (можно передать вместе с новым файлом или для обрезки существующего)
 
 #### Удалить план
 ```http
@@ -166,7 +188,8 @@ Content-Type: application/json
   "plan": 1,
   "name": "Лекционная аудитория 101",
   "x": 45.7,
-  "y": 30.2
+  "y": 30.2,
+  "info_text": "Описание при наведении на точку"
 }
 ```
 
@@ -183,6 +206,7 @@ GET /api/map_points/{id}/
   "name": "Лекционная аудитория 101",
   "x": 45.7,
   "y": 30.2,
+  "info_text": "",
   "panorama": {
     "id": 2,
     "image": "/media/panoramas/pano2.jpg",
@@ -193,7 +217,10 @@ GET /api/map_points/{id}/
         "target_point": 3,
         "target_point_name": "Коридор",
         "azimuth": 180.5,
-        "pitch": 0.0
+        "pitch": 0.0,
+        "type": "transition",
+        "label": "К коридору",
+        "text": ""
       }
     ]
   }
@@ -210,6 +237,7 @@ Content-Type: application/json
 - `name` (string, optional) - новое название
 - `x` (float, optional) - новая координата X (0-100%)
 - `y` (float, optional) - новая координата Y (0-100%)
+- `info_text` (string, optional) - информационный текст для точки
 
 #### Удалить точку
 ```http
@@ -231,7 +259,8 @@ Content-Type: multipart/form-data
 
 **Параметры формы:**
 - `point` (int, required) - ID точки, к которой привязана панорама
-- `image` (file, required) - панорамное изображение (JPG/PNG)
+- `image` (file, required) - панорамное изображение (JPG/PNG/WebP)
+- `crop` (string, optional) - JSON с данными обрезки `{"x":0,"y":0,"width":1200,"height":520,"rotate":0,"scaleX":1,"scaleY":1}`
 
 **Пример ответа:**
 ```json
@@ -246,6 +275,16 @@ Content-Type: multipart/form-data
 ```http
 GET /api/panoramas/{id}/
 ```
+
+#### Обновить панораму
+```http
+PATCH /api/panoramas/{id}/
+Content-Type: multipart/form-data
+```
+
+**Параметры:**
+- `image` (file, optional) - новое изображение (JPG/PNG/WebP)
+- `crop` (string, optional) - данные обрезки (можно указать для обрезки существующего файла)
 
 #### Удалить панораму
 ```http
@@ -268,15 +307,21 @@ GET /api/panorama_markers/?panorama={panorama_id}
     "target_point": 3,
     "target_point_name": "Коридор",
     "azimuth": 180.5,
-    "pitch": 0.0
+    "pitch": 0.0,
+    "type": "transition",
+    "label": "К коридору",
+    "text": ""
   },
   {
     "id": 2,
     "panorama": 2,
-    "target_point": 5,
-    "target_point_name": "Лестница",
+    "target_point": null,
+    "target_point_name": null,
     "azimuth": 270.0,
-    "pitch": 10.0
+    "pitch": 10.0,
+    "type": "info",
+    "label": "Инфо",
+    "text": "Описание"
   }
 ]
 ```
@@ -293,15 +338,21 @@ Content-Type: application/json
   "panorama": 2,
   "target_point": 3,
   "azimuth": 180.5,
-  "pitch": 0.0
+  "pitch": 0.0,
+  "type": "transition",
+  "label": "К аудитории 201",
+  "text": ""
 }
 ```
 
 **Пояснения к параметрам:**
 - `panorama` (int, required) - ID панорамы
-- `target_point` (int, required) - ID целевой точки
+- `type` (string, required) - `transition` или `info`
+- `target_point` (int, required для `transition`) - ID целевой точки; для `info` — `null`/не передаётся
 - `azimuth` (float, required) - угол направления в градусах (0-360)
 - `pitch` (float, optional) - угол по вертикали в градусах (по умолчанию 0)
+- `label` (string, optional) - подпись маркера
+- `text` (string, optional) - текст инфо-точки (используется при `type='info'`)
 
 #### Удалить маркер
 ```http
@@ -315,9 +366,11 @@ DELETE /api/panorama_markers/{id}/
 interface EvacPlan {
   id: number;
   title: string;
+  floor: number; // этаж
   image: string; // URL to image
   created_at: string; // ISO datetime
-  points?: MapPoint[]; // nested in list/detail views
+  points_count?: number; // в list view
+  points?: MapPoint[]; // nested в detail view
 }
 ```
 
@@ -329,6 +382,7 @@ interface MapPoint {
   name: string;
   x: number; // percentage (0-100)
   y: number; // percentage (0-100)
+  info_text: string; // информационный текст
   panorama?: Panorama; // optional, nested
 }
 ```
@@ -348,10 +402,13 @@ interface Panorama {
 interface PanoramaMarker {
   id: number;
   panorama: number; // Panorama ID
-  target_point: number; // MapPoint ID
+  target_point: number | null; // MapPoint ID (для transition)
   target_point_name?: string; // read-only, from serializer
   azimuth: number; // degrees (0-360)
   pitch: number; // degrees, default 0
+  type: 'transition' | 'info';
+  label?: string;
+  text?: string; // only for info
 }
 ```
 

@@ -10,6 +10,7 @@
 - **Добавление интерактивных точек** - размещение маркеров на плане с привязкой к панорамам
 - **Загрузка панорамных изображений** - 360° фотографии помещений
 - **Создание переходов между точками** - навигационные маркеры на панорамах
+- **Обрезка изображений** - встроенный кроп для планов и панорам с предпросмотром
 - **Просмотр готовых туров** - интерактивная навигация по зданиям
 
 ## Архитектура
@@ -32,10 +33,10 @@
 ### Модели данных
 
 ```python
-EvacPlan          # План эвакуации (изображение + метаданные)
-├── MapPoint      # Точка на плане (координаты X,Y + название)
+EvacPlan          # План эвакуации (название, этаж, изображение)
+├── MapPoint      # Точка на плане (координаты X,Y, название, info_text)
 │   └── Panorama  # Панорамное изображение (360° фото)
-│       └── PanoramaMarker  # Маркер перехода (азимут + цель)
+│       └── PanoramaMarker  # Маркер (transition/info): азимут, label, text, target_point)
 ```
 
 ## Установка и запуск
@@ -121,13 +122,16 @@ map/
 │   ├── views.py             # ViewSets для API
 │   ├── serializers.py       # Сериализаторы данных
 │   ├── urls.py              # API маршруты
+│   ├── utils.py             # Утилиты (обрезка изображений)
 │   └── migrations/          # Миграции БД
 ├── front/                   # Frontend приложение
 │   ├── views.py             # Django views для страниц
 │   ├── templates/           # HTML шаблоны
 │   │   ├── base.html        # Базовый шаблон
 │   │   ├── main.html        # Главная страница
-│   │   ├── admin.html       # Админ-панель
+│   │   ├── admin.html       # Редактор туров (админ-панель)
+│   │   ├── admin_login.html # Страница входа для администраторов
+│   │   ├── tour_view.html   # Просмотр тура по плану
 │   │   └── evac_plans.html  # Страница планов
 │   └── static/              # Статические файлы
 │       ├── css/             # Стили
@@ -143,28 +147,29 @@ map/
 ## API Endpoints
 
 ### Планы эвакуации
-- `GET /api/evac_plans/` - список всех планов
-- `POST /api/evac_plans/` - создать план (multipart/form-data)
+- `GET /api/evac_plans/` - список планов (`?search=`, `?floor=`)
+- `POST /api/evac_plans/` - создать план (multipart/form-data: `title`, `floor`, `image`, `crop`)
 - `GET /api/evac_plans/{id}/` - детали плана
 - `PATCH /api/evac_plans/{id}/` - обновить план
 - `DELETE /api/evac_plans/{id}/` - удалить план
 
 ### Точки на плане
-- `GET /api/map_points/` - список всех точек
-- `POST /api/map_points/` - создать точку
+- `GET /api/map_points/` - список точек (`?plan={id}`)
+- `POST /api/map_points/` - создать точку (`plan`, `name`, `x`, `y`, `info_text`)
 - `GET /api/map_points/{id}/` - детали точки
 - `PATCH /api/map_points/{id}/` - обновить точку
 - `DELETE /api/map_points/{id}/` - удалить точку
 
 ### Панорамы
-- `GET /api/panoramas/` - список всех панорам
-- `POST /api/panoramas/` - загрузить панораму (multipart/form-data)
+- `GET /api/panoramas/` - список панорам
+- `POST /api/panoramas/` - загрузить панораму (multipart/form-data: `point`, `image`, `crop`)
 - `GET /api/panoramas/{id}/` - детали панорамы
+- `PATCH /api/panoramas/{id}/` - обновить панораму
 - `DELETE /api/panoramas/{id}/` - удалить панораму
 
 ### Маркеры панорам
 - `GET /api/panorama_markers/?panorama={id}` - маркеры панорамы
-- `POST /api/panorama_markers/` - создать маркер
+- `POST /api/panorama_markers/` - создать маркер (`type=transition|info`, для `transition` — `target_point` обязателен, для `info` — `label`, `text`)
 - `DELETE /api/panorama_markers/{id}/` - удалить маркер
 
 ## Использование
@@ -189,7 +194,8 @@ map/
 
 - **Главная страница** (`/`) - обзор доступных туров
 - **Планы эвакуации** (`/evac_plans/`) - галерея всех планов
-- **Django Admin** (`/admin/`) - управление данными (для администраторов)
+- **Тур по плану** (`/tour/<plan_id>/`) - интерактивный просмотр тура выбранного плана
+- **Редактор туров** (`/admin/`) - создание и редактирование туров (только для staff)
 
 ## Разработка
 
@@ -259,6 +265,7 @@ CMD ["poetry", "run", "gunicorn", "map_core.wsgi:application", "--bind", "0.0.0.
 ## Авторы
 
 - **Артем Бедин** - разработчик
+- **Комарова Анна** - разработчик
 - Курский государственный университет, факультет физики, математики и информатики
 
 ## Благодарности
