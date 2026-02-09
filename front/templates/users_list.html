@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Пользователи{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
+<style>
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.users-table th {
+    background: #f3f4f6;
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+.users-table td {
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.users-table tr:hover {
+    background: #f8fafc;
+    cursor: pointer;
+}
+.status-pill {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #fff;
+}
+.status-pill.green { background: #16a34a; }
+.status-pill.gray { background: #6b7280; }
+.status-pill.orange { background: #f97316; }
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.toolbar input {
+    max-width: 320px;
+}
+.empty {
+    padding: 24px;
+    color: #64748b;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Пользователи</h1>
+
+    <div class="panel">
+        <div class="toolbar">
+            <input id="searchInput" class="form-control" type="search" placeholder="Поиск по имени, email, ФИО">
+            <button id="searchBtn" class="btn">Поиск</button>
+            <button id="resetBtn" class="btn gray">Сброс</button>
+        </div>
+
+        <div id="stateMessage" class="empty" style="display:none;"></div>
+
+        <div class="table-responsive">
+            <table class="users-table" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>Имя пользователя</th>
+                        <th>Email</th>
+                        <th>ФИО</th>
+                        <th>Активен</th>
+                        <th>Staff</th>
+                        <th>Superuser</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/users_list.js' %}"></script>
+{% endblock %}

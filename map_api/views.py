@@ -1,11 +1,22 @@
+from django.contrib.auth.models import User, Group, Permission
+from django.db.models import Q
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS
 from rest_framework.response import Response
 from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
 from .utils import apply_crop, parse_crop_data
+from .permissions import IsSuperUser
 from .serializers import (
-    EvacPlanSerializer, EvacPlanListSerializer, MapPointSerializer,
-    PanoramaSerializer, PanoramaMarkerSerializer
+    EvacPlanSerializer,
+    EvacPlanListSerializer,
+    MapPointSerializer,
+    PanoramaSerializer,
+    PanoramaMarkerSerializer,
+    UserAdminSerializer,
+    UserSetPasswordSerializer,
+    GroupSerializer,
+    PermissionSerializer,
 )
 
 
@@ -138,4 +149,62 @@ class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
         panorama_id = self.request.query_params.get('panorama')
         if panorama_id:
             qs = qs.filter(panorama_id=panorama_id)
+        return qs
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    Superuser-only full access to users.
+    """
+
+    queryset = User.objects.all().order_by('username').prefetch_related('groups', 'user_permissions')
+    serializer_class = UserAdminSerializer
+    permission_classes = [IsSuperUser]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search')
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                (
+                    Q(username__icontains=search)
+                    | Q(email__icontains=search)
+                    | Q(first_name__icontains=search)
+                    | Q(last_name__icontains=search)
+                )
+            )
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='set-password', permission_classes=[IsSuperUser])
+    def set_password(self, request, pk=None):
+        user = self.get_object()
+        serializer = UserSetPasswordSerializer(data=request.data, context={'user': user})
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        return Response({'detail': 'Пароль обновлён.'}, status=status.HTTP_200_OK)
+
+
+class GroupViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Group.objects.all().order_by('name')
+    serializer_class = GroupSerializer
+    permission_classes = [IsSuperUser]
+
+
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Permission.objects.select_related('content_type').all().order_by('content_type__app_label', 'codename')
+    serializer_class = PermissionSerializer
+    permission_classes = [IsSuperUser]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search')
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(name__icontains=search)
+                | Q(codename__icontains=search)
+                | Q(content_type__app_label__icontains=search)
+            )
         return qs

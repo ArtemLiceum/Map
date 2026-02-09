@@ -15,6 +15,11 @@ def is_admin(user):
     return user.is_authenticated and user.is_staff
 
 
+def is_superadmin(user):
+    """Check if user is superuser"""
+    return user.is_authenticated and user.is_superuser
+
+
 def main(request):
     plans = EvacPlan.objects.all()
     return render(request, "main.html", {"plans": plans})
@@ -90,3 +95,15 @@ def login_view(request):
             messages.error(request, 'Неверное имя пользователя или пароль.')
 
     return render(request, "login.html")
+
+
+@user_passes_test(is_superadmin, login_url='admin_login')
+@ensure_csrf_cookie
+def users_list(request):
+    return render(request, "users_list.html")
+
+
+@user_passes_test(is_superadmin, login_url='admin_login')
+@ensure_csrf_cookie
+def user_edit(request, user_id: int):
+    return render(request, "user_edit.html", {"user_id": user_id})
