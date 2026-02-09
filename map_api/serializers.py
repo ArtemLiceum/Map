@@ -3,14 +3,28 @@ from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
 
 
 class PanoramaMarkerSerializer(serializers.ModelSerializer):
-    target_point_name = serializers.CharField(source='target_point.name', read_only=True)
+    target_point_name = serializers.SerializerMethodField()
 
     class Meta:
         model = PanoramaMarker
         fields = [
             'id', 'panorama', 'target_point', 'target_point_name',
-            'azimuth', 'pitch', 'label'
+            'azimuth', 'pitch', 'label', 'type', 'text'
         ]
+
+    def get_target_point_name(self, obj):
+        return obj.target_point.name if obj.target_point else None
+
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        marker_type = attrs.get('type') or (instance.type if instance else PanoramaMarker.MarkerType.TRANSITION)
+        target_point = attrs.get('target_point', instance.target_point if instance else None)
+
+        if marker_type == PanoramaMarker.MarkerType.TRANSITION and target_point is None:
+            raise serializers.ValidationError({"target_point": "Целевая точка обязательна для переходной метки."})
+        if marker_type == PanoramaMarker.MarkerType.INFO and target_point is not None:
+            raise serializers.ValidationError({"target_point": "Для информационной метки target_point должен отсутствовать."})
+        return attrs
 
 
 class PanoramaSerializer(serializers.ModelSerializer):
@@ -26,7 +40,7 @@ class MapPointSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MapPoint
-        fields = ['id', 'plan', 'name', 'type', 'x', 'y', 'info_text', 'panorama']
+        fields = ['id', 'plan', 'name', 'x', 'y', 'info_text', 'panorama']
 
     def validate_x(self, value):
         """Clamp x to 0-100 range"""

@@ -5,6 +5,7 @@
 
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
+  <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.css">
 {% endblock %}
 
 {% block content %}
@@ -26,9 +27,13 @@
       <hr />
       <h3>2) План — добавить метку</h3>
       <div class="small">Клик по картинке добавит метку. Метки сохраняются в процентах от размеров изображения.</div>
+      <div class="small">Удерживайте маркер и перетащите, чтобы изменить его положение.</div>
 
       <div id="planWrap" style="margin-top:12px;">
         <img id="plan" src="" alt="План (загрузите изображение)" />
+      </div>
+      <div class="hint" style="margin-top:8px;">
+        <button id="planCropExistingBtn" class="btn gray" style="display:none">Обрезать текущий план</button>
       </div>
     </div>
 
@@ -64,13 +69,41 @@
   <div class="card wide">
     <h3 id="panoramaTitle">Панорама</h3>
     <div class="panorama-view" id="panoramaView"></div>
-    <div class="hint">Клик по панораме — добавит маркер перехода.</div>
+    <div class="hint">Клик по панораме — добавит маркер, его можно перетаскивать для изменения азимута/наклона.</div>
+    <div class="hint" style="margin-top:8px;">
+      <button id="panoramaCropBtn" class="btn gray">Обрезать эту панораму</button>
+      <button id="panoramaReplaceBtn" class="btn" style="margin-left:8px;">Заменить панораму</button>
+      <input id="panoramaReplaceInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none">
+    </div>
     <div class="modal-buttons">
       <button id="closePanoramaBtn" class="btn">Закрыть</button>
     </div>
   </div>
 </div>
 
+<!-- Модалка для кропа -->
+<div id="cropModal" class="modal">
+  <div class="card wide">
+    <h3 id="cropTitle">Обрезка изображения</h3>
+    <div class="crop-controls">
+      <div class="crop-aspects">
+        <label><input type="radio" name="cropAspect" value="free" checked> Свободно</label>
+        <label><input type="radio" name="cropAspect" value="16:9"> 16:9</label>
+        <label><input type="radio" name="cropAspect" value="21:9"> 21:9</label>
+      </div>
+      <div class="crop-preview" id="cropPreview"></div>
+    </div>
+    <div class="crop-canvas-wrap">
+      <img id="cropImage" alt="Выбранное изображение" />
+    </div>
+    <div class="modal-buttons">
+      <button id="cropConfirmBtn" class="btn">Сохранить обрезку</button>
+      <button id="cropCancelBtn" class="btn gray">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <!-- Подключаем JS -->
+<script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script src="{% static 'js/admin.js' %}"></script>
 {% endblock %}

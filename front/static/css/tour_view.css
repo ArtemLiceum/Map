@@ -73,6 +73,23 @@
   opacity: 0.9;
 }
 
+.tv-nav-marker.is-info {
+  background: rgba(16, 185, 129, 0.82);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.tv-nav-marker.is-info::before {
+  content: 'i';
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  font-size: 18px;
+  font-weight: 700;
+  transform: translateY(0);
+  opacity: 1;
+}
+
 .tv-nav-marker:hover {
   transform: translate(-50%, -50%) scale(1.12);
   border-color: rgba(255, 255, 255, 0.7);
@@ -235,4 +252,56 @@
     top: 10px;
     left: 10px;
   }
+}
+
+.tv-info-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 5;
+}
+
+.tv-info-overlay.visible {
+  display: flex;
+}
+
+.tv-info-card {
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 16px 20px;
+  border-radius: 14px;
+  max-width: min(520px, 90vw);
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.tv-info-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.tv-info-close:hover {
+  color: #e2e8f0;
+}
+
+.tv-info-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+
+.tv-info-card p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
 }

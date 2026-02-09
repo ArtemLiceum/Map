@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 
 class EvacPlan(models.Model):
@@ -19,24 +21,12 @@ class EvacPlan(models.Model):
 
 class MapPoint(models.Model):
     """Точка на плане эвакуации"""
-    TYPE_TRANSITION = 'transition'
-    TYPE_INFO = 'info'
-    TYPE_CHOICES = [
-        (TYPE_TRANSITION, 'Переходная (панорама)'),
-        (TYPE_INFO, 'Информационная'),
-    ]
-
     plan = models.ForeignKey(EvacPlan, related_name='points', on_delete=models.CASCADE)
     name = models.CharField(max_length=100, verbose_name="Название")
-    type = models.CharField(
-        max_length=20,
-        choices=TYPE_CHOICES,
-        default=TYPE_TRANSITION,
-        verbose_name="Тип точки"
-    )
     x = models.FloatField(help_text="Координата X в процентах (0–100)")
     y = models.FloatField(help_text="Координата Y в процентах (0–100)")
     info_text = models.TextField(
+        null=True,
         blank=True,
         default='',
         verbose_name="Информационный текст",
@@ -49,7 +39,7 @@ class MapPoint(models.Model):
         verbose_name_plural = "Точки на плане"
 
     def __str__(self):
-        return f"{self.plan.title} — {self.name} ({self.type})"
+        return f"{self.plan.title} — {self.name}"
 
 
 class Panorama(models.Model):
@@ -67,12 +57,19 @@ class Panorama(models.Model):
 
 class PanoramaMarker(models.Model):
     """Метка в панораме для перехода к следующей точке"""
+    class MarkerType(models.TextChoices):
+        TRANSITION = 'transition', 'Переходная (панорама)'
+        INFO = 'info', 'Информационная'
+
     panorama = models.ForeignKey(Panorama, related_name='markers', on_delete=models.CASCADE)
     target_point = models.ForeignKey(
         MapPoint,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         verbose_name="Целевая точка",
-        related_name='incoming_markers'
+        related_name='incoming_markers',
+        help_text="Точка, на которую переходит панорама при нажатии на маркер"
     )
     azimuth = models.FloatField(
         help_text="Азимут направления на маркер (0–360°)",
@@ -90,11 +87,46 @@ class PanoramaMarker(models.Model):
         verbose_name="Подпись перехода",
         help_text="Текст, отображаемый на маркере"
     )
+    text = models.TextField(
+        blank=True,
+        default='',
+        verbose_name="Текст информационной точки",
+        help_text="Подробный текст для информационной метки"
+    )
+    type = models.CharField(
+        max_length=20,
+        choices=MarkerType.choices,
+        default=MarkerType.TRANSITION,
+        verbose_name="Тип точки"
+    )
 
     class Meta:
         ordering = ['id']
         verbose_name = "Маркер перехода"
         verbose_name_plural = "Маркеры переходов"
+        constraints = [
+            models.CheckConstraint(
+                check=Q(type='info') | Q(target_point__isnull=False),
+                name="panoramamarker_transition_requires_target",
+            ),
+            models.CheckConstraint(
+                check=Q(type='transition') | Q(target_point__isnull=True),
+                name="panoramamarker_info_target_null",
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.panorama.point.name} → {self.target_point.name}"
+        if self.type == self.MarkerType.INFO:
+            label = self.label or "Информация"
+            return f"{self.panorama.point.name} [info: {label}]"
+        target = getattr(self, "target_point", None)
+        target_name = target.name if target else "—"
+        return f"{self.panorama.point.name} → {target_name}"
+
+    def clean(self):
+        """Ensure target_point presence matches marker type."""
+        super().clean()
+        if self.type == self.MarkerType.TRANSITION and not self.target_point:
+            raise ValidationError({"target_point": "Целевая точка обязательна для переходной метки."})
+        if self.type == self.MarkerType.INFO and self.target_point:
+            raise ValidationError({"target_point": "Для информационной метки целевая точка должна быть пустой."})

@@ -4,6 +4,7 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib import messages
 from django.http import HttpResponseForbidden
+from django.views.decorators.csrf import ensure_csrf_cookie
 from map_api.models import EvacPlan
 
 # Navigation template tags: front.templatetags.nav_tags
@@ -33,6 +34,7 @@ def tour_view(request, plan_id: int):
 
 # Редактор (только для staff)
 @user_passes_test(is_admin, login_url='admin_login')
+@ensure_csrf_cookie
 def admin_editor(request):
     return render(request, "admin.html")
 

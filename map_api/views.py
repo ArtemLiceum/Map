@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS
 from rest_framework.response import Response
 from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+from .utils import apply_crop, parse_crop_data
 from .serializers import (
     EvacPlanSerializer, EvacPlanListSerializer, MapPointSerializer,
     PanoramaSerializer, PanoramaMarkerSerializer
@@ -30,6 +31,28 @@ class AdminOnlyViewSetMixin:
             permission_classes = [IsAdminUser]
         return [permission() for permission in permission_classes]
 
+    def get_serializer(self, *args, **kwargs):
+        if 'data' in kwargs:
+            try:
+                data = kwargs['data'].copy()
+                data.pop('crop', None)
+                kwargs['data'] = data
+            except Exception:
+                pass
+        return super().get_serializer(*args, **kwargs)
+
+    def _get_cropped_file(self, request, *, field_name='image', instance=None):
+        """
+        Returns cropped file if crop data provided, otherwise the original uploaded file (if any).
+        If no new file is uploaded and crop is provided, it will crop the existing instance file.
+        """
+        crop_data = parse_crop_data(request.data.get('crop'))
+        uploaded = request.FILES.get(field_name)
+        source = uploaded or getattr(instance, field_name, None)
+        if crop_data and source:
+            return apply_crop(source, crop_data, preferred_name=getattr(source, 'name', None))
+        return uploaded
+
 
 class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     queryset = EvacPlan.objects.prefetch_related('points', 'points__panorama', 'points__panorama__markers').all()
@@ -50,6 +73,20 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
             qs = qs.filter(floor=floor)
         return qs.distinct()
 
+    def perform_create(self, serializer):
+        cropped = self._get_cropped_file(self.request)
+        serializer.save(image=cropped or self.request.FILES.get('image'))
+
+    def perform_update(self, serializer):
+        instance: EvacPlan = serializer.instance
+        cropped = self._get_cropped_file(self.request, instance=instance)
+        if cropped:
+            if instance.image:
+                instance.image.delete(save=False)
+            serializer.save(image=cropped)
+        else:
+            serializer.save()
+
 
 class MapPointViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     queryset = MapPoint.objects.select_related('plan', 'panorama').prefetch_related('panorama__markers').all()
@@ -60,9 +97,6 @@ class MapPointViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
         plan_id = self.request.query_params.get('plan')
         if plan_id:
             qs = qs.filter(plan_id=plan_id)
-        point_type = self.request.query_params.get('type')
-        if point_type:
-            qs = qs.filter(type=point_type)
         return qs
 
 
@@ -79,6 +113,20 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
                 existing.image.delete(save=False)
                 existing.delete()
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        cropped = self._get_cropped_file(self.request)
+        serializer.save(image=cropped or self.request.FILES.get('image'))
+
+    def perform_update(self, serializer):
+        instance: Panorama = serializer.instance
+        cropped = self._get_cropped_file(self.request, instance=instance)
+        if cropped:
+            if instance.image:
+                instance.image.delete(save=False)
+            serializer.save(image=cropped)
+        else:
+            serializer.save()
 
 
 class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):

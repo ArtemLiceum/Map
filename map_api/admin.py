@@ -5,7 +5,7 @@ from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
 class PanoramaMarkerInline(admin.TabularInline):
     model = PanoramaMarker
     extra = 1
-    fields = ('target_point', 'azimuth', 'pitch', 'label')
+    fields = ('type', 'target_point', 'azimuth', 'pitch', 'label', 'text')
 
 
 class PanoramaInline(admin.StackedInline):
@@ -17,7 +17,7 @@ class PanoramaInline(admin.StackedInline):
 class MapPointInline(admin.TabularInline):
     model = MapPoint
     extra = 1
-    fields = ('name', 'type', 'x', 'y', 'info_text')
+    fields = ('name', 'x', 'y', 'info_text')
 
 
 @admin.register(EvacPlan)
@@ -31,8 +31,8 @@ class EvacPlanAdmin(admin.ModelAdmin):
 
 @admin.register(MapPoint)
 class MapPointAdmin(admin.ModelAdmin):
-    list_display = ('name', 'plan', 'type', 'x', 'y')
-    list_filter = ('type', 'plan')
+    list_display = ('name', 'plan', 'x', 'y')
+    list_filter = ('plan',)
     search_fields = ('name', 'info_text')
     inlines = [PanoramaInline]
 
@@ -46,9 +46,9 @@ class PanoramaAdmin(admin.ModelAdmin):
 
 @admin.register(PanoramaMarker)
 class PanoramaMarkerAdmin(admin.ModelAdmin):
-    # list_display = ('panorama', 'target_point', 'label', 'azimuth', 'pitch')
+    list_display = ('panorama', 'type', 'target_point', 'label', 'azimuth', 'pitch')
     list_filter = ('panorama__point__plan',)
-    # search_fields = ('label', 'panorama__point__name', 'target_point__name')
+    search_fields = ('label', 'text', 'panorama__point__name', 'target_point__name')
 
 
 # @admin.register(PanoramaInfoPoint)

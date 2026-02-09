@@ -11,6 +11,10 @@
   const minimapPointsEl = document.getElementById('tvMinimapPoints');
   const minimapToggleEl = document.getElementById('tvMinimapToggle');
   const panoramaContainer = document.getElementById('tvPanorama');
+  const infoOverlay = document.getElementById('tvInfoOverlay');
+  const infoOverlayTitle = document.getElementById('tvInfoTitle');
+  const infoOverlayText = document.getElementById('tvInfoText');
+  const infoOverlayClose = document.getElementById('tvInfoClose');
 
   const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
 
@@ -111,10 +115,20 @@
     markersLayer.innerHTML = '';
     state.markers = markers.map(m => {
       const el = document.createElement('button');
-      el.className = 'tv-nav-marker';
+      const isInfo = m.type === 'info';
+      el.className = 'tv-nav-marker' + (isInfo ? ' is-info' : '');
       el.type = 'button';
-      el.title = m.target_point_name || 'Переход';
-      el.setAttribute('aria-label', m.target_point_name || 'Переход');
+
+      const label = isInfo
+        ? (m.label || 'Информация')
+        : (m.target_point_name || 'Переход');
+      // Показываем подсказку только для переходов, чтобы инфо-точки не раскрывали текст на hover
+      if (!isInfo) {
+        el.title = label;
+      }
+      el.setAttribute('aria-label', label);
+      el.dataset.markerId = String(m.id);
+
       // Click handled separately to avoid drag interference
       el.dataset.targetPoint = String(m.target_point);
       markersLayer.appendChild(el);
@@ -138,9 +152,14 @@
     return (azimuth % 360) * state.tileWidth / 360;
   }
 
+  function clamp(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+  }
+
   function updateMarkersPosition(offsetMod) {
     const w = state.tileWidth || 1;
     const view = state.viewportW || window.innerWidth;
+    const containerH = panoramaContainer.clientHeight || window.innerHeight;
     const padding = 60;
 
     state.markers.forEach(({ data, el }) => {
@@ -155,6 +174,9 @@
         chosen = ((base - offsetMod) % w + w) % w;
       }
       el.style.left = `${chosen}px`;
+      const pitch = Number.isFinite(data.pitch) ? data.pitch : 0;
+      const topPx = (clamp(pitch, -90, 90) + 90) / 180 * containerH;
+      el.style.top = `${topPx}px`;
     });
   }
 
@@ -299,10 +321,13 @@
     markersLayer.addEventListener('click', (e) => {
       const marker = e.target.closest('.tv-nav-marker');
       if (!marker) return;
-      const targetId = Number(marker.dataset.targetPoint);
-      if (targetId) {
-        switchToPoint(targetId);
+      const markerData = state.markers.find(({ data }) => String(data.id) === marker.dataset.markerId)?.data;
+      if (markerData?.type === 'info') {
+        showInfoOverlay(markerData);
+        return;
       }
+      const targetId = Number(marker.dataset.targetPoint);
+      if (targetId) switchToPoint(targetId);
     });
 
     minimapToggleEl.addEventListener('click', () => {
@@ -310,6 +335,22 @@
       minimapToggleEl.setAttribute('aria-pressed', hidden ? 'true' : 'false');
       minimapToggleEl.textContent = hidden ? '⤢' : '⤡';
     });
+
+    infoOverlayClose?.addEventListener('click', hideInfoOverlay);
+    infoOverlay?.addEventListener('click', (ev) => {
+      if (ev.target === infoOverlay) hideInfoOverlay();
+    });
+  }
+
+  function showInfoOverlay(marker) {
+    if (!infoOverlay) return;
+    if (infoOverlayTitle) infoOverlayTitle.textContent = marker.label || 'Информация';
+    if (infoOverlayText) infoOverlayText.textContent = marker.text || 'Нет описания';
+    infoOverlay.classList.add('visible');
+  }
+
+  function hideInfoOverlay() {
+    infoOverlay?.classList.remove('visible');
   }
 
   function init() {
