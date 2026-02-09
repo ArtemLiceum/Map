@@ -40,6 +40,7 @@ let cropper = null;
 
 let tempPointCoords = null;
 let editingPoint = null;
+let lastDragAt = 0;
 
 // --- API helpers ---
 function getCookie(name) {
@@ -94,6 +95,15 @@ async function updateMapPoint(id, payload) {
   });
   if (!res.ok) throw new Error('Ошибка обновления точки');
   return await res.json();
+}
+
+async function deleteMapPoint(id) {
+  const res = await apiFetch(`${API.createPoint}${id}/`, { method: 'DELETE' });
+  if (res.status === 403) {
+    throw new Error('Нет прав или CSRF-токен отсутствует. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Ошибка удаления точки');
+  return true;
 }
 
 async function uploadPanorama(pointId, file, crop = null) {
@@ -335,6 +345,9 @@ planCropExistingBtn?.addEventListener('click', async () => {
 });
 
 planWrap.addEventListener('click', e => {
+  // Игнорируем клик, который сразу следует за перетаскиванием маркера,
+  // чтобы не открывать модалку создания новой точки.
+  if (Date.now() - lastDragAt < 350) return;
   if (!state.plan) return alert('Сначала нужно добавить план');
   const rect = plan.getBoundingClientRect();
   tempPointCoords = {
@@ -411,9 +424,10 @@ function renderAll() {
     el.style.left = pt.x+'%';
     el.style.top = pt.y+'%';
     el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      ev.preventDefault();
       if (el._skipClick) { el._skipClick = false; return; }
       if (el._dragging) return;
-      ev.stopPropagation();
       onClickPoint(pt);
     });
     attachPlanMarkerDrag(el, pt);
@@ -473,6 +487,7 @@ function attachPlanMarkerDrag(el, point) {
     el.releasePointerCapture?.(ev.pointerId);
     if (!moved) return;
     el._skipClick = true;
+    lastDragAt = Date.now();
     const newX = parseFloat(el.dataset.tmpX ?? point.x);
     const newY = parseFloat(el.dataset.tmpY ?? point.y);
     try {
@@ -494,7 +509,23 @@ function attachPlanMarkerDrag(el, point) {
 }
 
 window.editPoint = function(id){ const p = state.points.find(x => x.id===id); if(p) openPointModal(p); }
-window.deletePoint = function(id){ if(!confirm('Удалить точку?')) return; state.points=state.points.filter(p=>p.id!==id); saveState(); renderAll(); }
+window.deletePoint = async function(id){
+  if(!confirm('Удалить точку?')) return;
+  try {
+    await deleteMapPoint(id);
+    state.points = state.points.filter(p => p.id !== id);
+    // If the point is currently being edited, close the modal.
+    if (editingPoint?.id === id) {
+      editingPoint = null;
+      tempPointCoords = null;
+      pointModal.style.display = 'none';
+    }
+    saveState();
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось удалить точку');
+  }
+}
 
 async function onClickPoint(point){
   if(!point.panorama){

@@ -25,7 +25,10 @@ def main(request):
     return render(request, "main.html", {"plans": plans})
 
 
+@ensure_csrf_cookie
 def evac_plans(request):
+    # Public page, but it can contain admin actions via JS (DELETE, etc.).
+    # Ensure CSRF cookie is set so SessionAuthentication can validate unsafe methods.
     return render(request, "evac_plans.html")
 
 

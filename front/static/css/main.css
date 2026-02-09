@@ -1,0 +1,57 @@
+/* Стили карточек туров на главной */
+:root {
+    --tour-card-w: 220px;
+    --tour-card-h: 260px;
+}
+
+.tours-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.tour-card-item {
+    flex: 0 0 var(--tour-card-w);
+    width: var(--tour-card-w);
+}
+
+.tour-card {
+    min-height: var(--tour-card-h);
+    display: flex;
+    flex-direction: column;
+}
+
+.tour-card .card-img-top {
+    height: 180px;
+    object-fit: cover;
+    width: 100%;
+    margin-bottom: 0;
+    border-radius: 0;
+}
+
+.tour-card .card-body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 14px;
+}
+
+.tour-card .card-title {
+    margin-bottom: 0;
+    font-size: 18px;
+}
+
+.tours-empty {
+    flex: 1 1 100%;
+    text-align: center;
+    padding: 12px 0;
+}
+
+@media (max-width: 575.98px) {
+    .tour-card-item {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+}
