@@ -131,6 +131,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'map_core.auth_backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/4.0/topics/i18n/
 
@@ -186,6 +193,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
 }

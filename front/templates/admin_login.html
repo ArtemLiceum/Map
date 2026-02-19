@@ -103,13 +103,13 @@
 
         {% if form.errors %}
         <div class="login-error">
-            Неверное имя пользователя или пароль
+            Неверный email или пароль
         </div>
         {% endif %}
 
         <div class="field">
-            <label for="id_username">Имя пользователя</label>
-            <input type="text" name="username" id="id_username" autofocus required>
+            <label for="id_email">Email</label>
+            <input type="email" name="email" id="id_email" autofocus required>
         </div>
 
         <div class="field">

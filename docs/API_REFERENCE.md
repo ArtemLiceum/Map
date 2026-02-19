@@ -15,7 +15,7 @@ POST /api/token/
 Content-Type: application/json
 
 {
-  "username": "admin",
+  "email": "admin@example.com",
   "password": "password"
 }
 ```
