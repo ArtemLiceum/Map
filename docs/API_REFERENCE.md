@@ -423,8 +423,44 @@ interface PanoramaMarker {
   type: 'transition' | 'info';
   label?: string;
   text?: string; // only for info
+  tours?: number[]; // только для info; список туров, к которым привязана метка
 }
 ```
+
+#### Фильтрация info-маркеров
+- Неавторизованный пользователь: info-маркеры в ответе `/api/evac_plans/{id}/` не возвращаются.
+- Авторизованный (не staff): info-маркеры возвращаются **только** если передан `?tour=<id>`, и только связанные с этим туром; переходы возвращаются всегда.
+- Staff: возвращаются все маркеры (переходы + info).
+- Дополнительно: `tours` можно передавать/редактировать **только** для `type='info'`. Все указанные туры должны относиться к тому же плану, что и панорама метки.
+
+### 5. Туры (Tour)
+
+#### Получить список туров плана
+```http
+GET /api/tours/?plan={evac_plan_id}
+```
+- Доступ: авторизованные пользователи (для не-staff — только активные туры).
+
+#### Создать тур
+```http
+POST /api/tours/
+Content-Type: application/json
+```
+Параметры: `plan` (required), `title` (required), `is_active` (bool, default true).
+Доступ: staff.
+
+#### Обновить тур
+```http
+PATCH /api/tours/{id}/
+```
+Параметры: `title`, `is_active`.
+Доступ: staff.
+
+#### Удалить тур
+```http
+DELETE /api/tours/{id}/
+```
+Доступ: staff.
 
 ## Обработка ошибок
 

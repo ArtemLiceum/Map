@@ -1,17 +1,23 @@
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour
 
 
 class PanoramaMarkerSerializer(serializers.ModelSerializer):
     target_point_name = serializers.SerializerMethodField()
+    tours = serializers.PrimaryKeyRelatedField(
+        many=True,
+        required=False,
+        queryset=Tour.objects.all(),
+        allow_empty=True,
+    )
 
     class Meta:
         model = PanoramaMarker
         fields = [
             'id', 'panorama', 'target_point', 'target_point_name',
-            'azimuth', 'pitch', 'label', 'type', 'text'
+            'azimuth', 'pitch', 'label', 'type', 'text', 'tours'
         ]
 
     def get_target_point_name(self, obj):
@@ -21,12 +27,54 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
         instance = getattr(self, 'instance', None)
         marker_type = attrs.get('type') or (instance.type if instance else PanoramaMarker.MarkerType.TRANSITION)
         target_point = attrs.get('target_point', instance.target_point if instance else None)
+        tours = attrs.get('tours', None)
+        panorama = attrs.get('panorama', instance.panorama if instance else None)
 
         if marker_type == PanoramaMarker.MarkerType.TRANSITION and target_point is None:
             raise serializers.ValidationError({"target_point": "Целевая точка обязательна для переходной метки."})
         if marker_type == PanoramaMarker.MarkerType.INFO and target_point is not None:
             raise serializers.ValidationError({"target_point": "Для информационной метки target_point должен отсутствовать."})
+
+        # Tours allowed only for info markers
+        if marker_type == PanoramaMarker.MarkerType.TRANSITION:
+            if tours not in (None, []):
+                raise serializers.ValidationError({"tours": "Привязка к туру доступна только для информационных меток."})
+            # ensure cleanup if marker was info before
+            if tours is None and instance and instance.tours.exists():
+                attrs['tours'] = []
+        else:
+            if tours:
+                plan_id = self._get_plan_id_from_panorama(panorama)
+                for tour in tours:
+                    if tour.plan_id != plan_id:
+                        raise serializers.ValidationError({"tours": f"Тур {tour.id} относится к другому плану."})
         return attrs
+
+    def _get_plan_id_from_panorama(self, panorama):
+        if not panorama:
+            return None
+        if hasattr(panorama, 'point'):
+            return panorama.point.plan_id
+        pano_id = panorama.pk if hasattr(panorama, 'pk') else panorama
+        try:
+            pano = Panorama.objects.select_related('point__plan').only('id', 'point__plan').get(id=pano_id)
+            return pano.point.plan_id
+        except Panorama.DoesNotExist:
+            return None
+
+    def create(self, validated_data):
+        tours = validated_data.pop('tours', [])
+        marker = super().create(validated_data)
+        if tours:
+            marker.tours.set(tours)
+        return marker
+
+    def update(self, instance, validated_data):
+        tours = validated_data.pop('tours', None)
+        marker = super().update(instance, validated_data)
+        if tours is not None:
+            marker.tours.set(tours)
+        return marker
 
 
 class PanoramaSerializer(serializers.ModelSerializer):
@@ -146,6 +194,17 @@ class UserAdminSerializer(serializers.ModelSerializer):
                     "Нельзя отключить последнего активного суперпользователя."
                 )
         return attrs
+
+
+class TourSerializer(serializers.ModelSerializer):
+    markers_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tour
+        fields = ['id', 'plan', 'title', 'is_active', 'created_at', 'markers_count']
+
+    def get_markers_count(self, obj):
+        return obj.markers.count()
 
 
 class UserSetPasswordSerializer(serializers.Serializer):

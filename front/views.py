@@ -38,7 +38,15 @@ def faq(request):
 
 def tour_view(request, plan_id: int):
     # Render viewer; JS will pull data via API using plan_id.
-    return render(request, "tour_view.html", {"plan_id": plan_id})
+    return render(
+        request,
+        "tour_view.html",
+        {
+            "plan_id": plan_id,
+            "is_auth": request.user.is_authenticated,
+            "is_staff": request.user.is_staff if request.user.is_authenticated else False,
+        },
+    )
 
 # Редактор (только для staff)
 @user_passes_test(is_admin, login_url='admin_login')

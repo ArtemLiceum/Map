@@ -2,13 +2,14 @@ const API = {
   createPlan: '/api/evac_plans/',
   createPoint: '/api/map_points/',
   uploadPanorama: '/api/panoramas/',
-  createPanoramaMarker: '/api/panorama_markers/'
+  createPanoramaMarker: '/api/panorama_markers/',
+  createTour: '/api/tours/'
 };
 
 const DRAG_THRESHOLD_PX = 4; // minimal move to treat as drag
 
 const LS_KEY = 'evac_editor_state_v1';
-let state = { plan: null, points: [] };
+let state = { plan: null, points: [], tours: [] };
 
 const plan = document.getElementById('plan');
 const planWrap = document.getElementById('planWrap');
@@ -20,6 +21,8 @@ const panoramaUpload = document.getElementById('panoramaUpload');
 const savePointBtn = document.getElementById('savePointBtn');
 const cancelPointBtn = document.getElementById('cancelPointBtn');
 const pointsList = document.getElementById('pointsList');
+const toursList = document.getElementById('toursList');
+const addTourBtn = document.getElementById('addTourBtn');
 const panoramaModal = document.getElementById('panoramaModal');
 const panoramaView = document.getElementById('panoramaView');
 const panoramaTitle = document.getElementById('panoramaTitle');
@@ -161,10 +164,40 @@ async function updatePanoramaImage(panoramaId, file, crop = null) {
   return await res.json();
 }
 
+async function fetchTours(planId) {
+  const res = await apiFetch(`${API.createTour}?plan=${planId}`);
+  if (res.status === 401) throw new Error('Требуется авторизация для просмотра туров');
+  if (!res.ok) throw new Error('Не удалось загрузить туры');
+  return await res.json();
+}
+
+async function createTour(planId, title, is_active = true) {
+  const res = await apiFetch(API.createTour, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan: planId, title, is_active })
+  });
+  if (!res.ok) throw new Error('Ошибка создания тура');
+  return await res.json();
+}
+
+async function updateTour(id, payload) {
+  const res = await apiFetch(`${API.createTour}${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Ошибка обновления тура');
+  return await res.json();
+}
+
 // --- LocalStorage ---
 function loadState() {
   try { const raw = localStorage.getItem(LS_KEY); if(raw) state = JSON.parse(raw); } catch(e){console.warn(e);}
   if (planTitle) planTitle.value = state.plan?.title || '';
+  if (state.plan?.id) {
+    refreshTours(state.plan.id).catch(err => console.warn(err));
+  }
   renderAll();
 }
 
@@ -173,9 +206,21 @@ function saveState() {
 }
 
 function clearState() {
-  state = { plan: null, points: [] };
+  state = { plan: null, points: [], tours: [] };
   try { localStorage.removeItem(LS_KEY); } catch (e) { console.warn(e); }
   if (planTitle) planTitle.value = '';
+  renderAll();
+}
+
+async function refreshTours(planId) {
+  if (!planId) { state.tours = []; return; }
+  try {
+    const list = await fetchTours(planId);
+    state.tours = Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn(err);
+    state.tours = [];
+  }
   renderAll();
 }
 
@@ -261,7 +306,7 @@ async function fileFromUrl(url, fallbackName = 'image.jpg') {
 }
 
 async function loadPlanFromServer(planId) {
-  const res = await fetch(`/api/evac_plans/${planId}/`);
+  const res = await fetch(`/api/evac_plans/${planId}/?include_info=1`);
   if (!res.ok) throw new Error('Не удалось загрузить план');
   const data = await res.json();
 
@@ -280,6 +325,7 @@ async function loadPlanFromServer(planId) {
   }));
 
   if (planTitle) planTitle.value = state.plan.title || '';
+  await refreshTours(planId);
   saveState();
   renderAll();
 }
@@ -328,6 +374,7 @@ planUpload.addEventListener('change', async e => {
     const planData = await uploadPlan(croppedFile, title, crop);
     state.plan = { id: planData.id, title: planData.title, imageUrl: planData.image };
     state.points = [];
+    await refreshTours(state.plan.id);
     if (planTitle) planTitle.value = planData.title || '';
     saveState(); renderAll();
   } catch (err) { if (err.message !== 'Обрезка отменена') alert(err.message); console.error(err); }
@@ -342,6 +389,20 @@ planCropExistingBtn?.addEventListener('click', async () => {
     state.plan = { id: updated.id, title: updated.title, imageUrl: updated.image };
     saveState(); renderAll();
   } catch (err) { console.error(err); if (err.message !== 'Обрезка отменена') alert(err.message); }
+});
+
+addTourBtn?.addEventListener('click', async () => {
+  if (!state.plan?.id) return alert('Сначала выберите план');
+  const title = (prompt('Название тура', '') || '').trim();
+  if (!title) return;
+  const isActive = confirm('Сделать тур активным?');
+  try {
+    const created = await createTour(state.plan.id, title, isActive);
+    state.tours.push(created);
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось создать тур');
+  }
 });
 
 planWrap.addEventListener('click', e => {
@@ -370,7 +431,23 @@ cancelPointBtn.addEventListener('click', () => { pointModal.style.display = 'non
 savePointBtn.addEventListener('click', async () => {
   const name = pointName.value.trim() || 'Точка';
   if(editingPoint){
-    editingPoint.name = name;
+    // Persist point changes to server (previously it updated only UI/LocalStorage)
+    try {
+      const updated = await updateMapPoint(editingPoint.id, {
+        name,
+        x: editingPoint.x,
+        y: editingPoint.y,
+        info_text: editingPoint.info_text ?? ''
+      });
+      editingPoint.name = updated.name;
+      editingPoint.x = updated.x;
+      editingPoint.y = updated.y;
+      editingPoint.info_text = updated.info_text;
+    } catch (err) {
+      alert(err.message || 'Не удалось сохранить изменения точки');
+      return;
+    }
+
     if(panoramaUpload.files.length){
       try {
         const { file: croppedFile, crop } = await openCropperDialog({
@@ -441,6 +518,61 @@ function renderAll() {
       <button onclick="deletePoint(${p.id})">🗑️</button>
       ${p.panorama ? `<button onclick="openPanoramaBtn(${p.id})">🖼️</button>` : ''}
     </div>`).join('') || '<div class="small">Точек пока нет</div>';
+
+  renderTours();
+}
+
+function renderTours() {
+  if (!toursList) return;
+  if (!state.plan?.id) {
+    toursList.innerHTML = '<div class="small">Сначала выберите план</div>';
+    return;
+  }
+  if (!state.tours?.length) {
+    toursList.innerHTML = '<div class="small">Туры пока не созданы</div>';
+    return;
+  }
+  toursList.innerHTML = state.tours.map(t => `
+    <div style="margin-bottom:6px;">
+      <b>${t.title}</b> ${t.is_active ? '🟢' : '⚪️'}
+      <button onclick="renameTour(${t.id})">✏️</button>
+      <button onclick="toggleTour(${t.id})">${t.is_active ? 'Деактивировать' : 'Активировать'}</button>
+    </div>
+  `).join('');
+}
+
+async function renameTour(tourId) {
+  const tour = state.tours.find(t => t.id === tourId);
+  if (!tour) return;
+  const newTitle = (prompt('Новое название тура', tour.title) || '').trim();
+  if (!newTitle || newTitle === tour.title) return;
+  try {
+    const updated = await updateTour(tourId, { title: newTitle });
+    Object.assign(tour, updated);
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось переименовать тур');
+  }
+}
+
+async function toggleTour(tourId) {
+  const tour = state.tours.find(t => t.id === tourId);
+  if (!tour) return;
+  try {
+    const updated = await updateTour(tourId, { is_active: !tour.is_active });
+    Object.assign(tour, updated);
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось обновить тур');
+  }
+}
+
+function parseTourIds(input) {
+  if (!input) return [];
+  return input
+    .split(/[,\\s]+/)
+    .map(s => parseInt(s, 10))
+    .filter(n => Number.isFinite(n));
 }
 
 function clamp(num, min, max) {
@@ -525,6 +657,13 @@ window.deletePoint = async function(id){
   } catch (err) {
     alert(err.message || 'Не удалось удалить точку');
   }
+}
+
+// Called from the right-side list button (🖼️). Should behave like clicking the marker on the plan.
+window.openPanoramaBtn = function(id) {
+  const p = state.points.find(x => x.id === id);
+  if (!p) return;
+  onClickPoint(p);
 }
 
 async function onClickPoint(point){
@@ -711,6 +850,7 @@ async function openPanorama(point){
     let targetId = null;
     let label = '';
     let text = '';
+    let tours = [];
 
     if(markerType === 'transition'){
       const options = state.points.map(p=>`${p.id}:${p.name}`).join('\n');
@@ -720,6 +860,13 @@ async function openPanorama(point){
     } else {
       label = prompt('Заголовок информационной точки', '') || '';
       text = prompt('Текст информационной точки', '') || '';
+      const tourOptions = (state.tours || []).map(t => `${t.id}:${t.title}${t.is_active ? '' : ' (неактивен)'}`).join('\n');
+      if (state.tours?.length) {
+        const toursInput = prompt(`Укажите туры (id через запятую)\n${tourOptions}`, (state.tours.filter(t=>t.is_active).map(t=>t.id)).join(','));
+        tours = parseTourIds(toursInput);
+      } else {
+        tours = [];
+      }
     }
 
     const newMarker = await createPanoramaMarker({
@@ -729,7 +876,8 @@ async function openPanorama(point){
       azimuth,
       pitch,
       label,
-      text
+      text,
+      tours
     });
     point.panorama.markers.push(newMarker);
     renderPanMarkers();
@@ -776,11 +924,17 @@ async function openPanorama(point){
       const targetId = parseInt(prompt(`Выберите целевую точку (ID:Name)\n${options}`, marker.target_point || ''));
       if(!targetId || !state.points.find(p=>p.id===targetId)) return alert('Некорректная точка');
       const label = prompt('Подпись перехода', marker.label || '') || '';
-      payload = { ...payload, target_point: targetId, label, text: '' };
+      payload = { ...payload, target_point: targetId, label, text: '', tours: [] };
     } else {
       const label = prompt('Заголовок инфо-точки', marker.label || '') || '';
       const text = prompt('Текст инфо-точки', marker.text || '') || '';
-      payload = { ...payload, target_point: null, label, text };
+      const tourOptions = (state.tours || []).map(t => `${t.id}:${t.title}${t.is_active ? '' : ' (неактивен)'}`).join('\n');
+      let tours = [];
+      if (state.tours?.length) {
+        const toursInput = prompt(`Укажите туры (id через запятую)\n${tourOptions}`, (marker.tours || []).join(','));
+        tours = parseTourIds(toursInput);
+      }
+      payload = { ...payload, target_point: null, label, text, tours };
     }
 
     try{

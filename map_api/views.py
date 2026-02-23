@@ -2,9 +2,10 @@ from django.contrib.auth.models import User, Group, Permission
 from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS
+from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS, IsAuthenticated
 from rest_framework.response import Response
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+from django.db.models import Prefetch
+from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour
 from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
 from .serializers import (
@@ -17,6 +18,7 @@ from .serializers import (
     UserSetPasswordSerializer,
     GroupSerializer,
     PermissionSerializer,
+    TourSerializer,
 )
 
 
@@ -66,7 +68,7 @@ class AdminOnlyViewSetMixin:
 
 
 class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
-    queryset = EvacPlan.objects.prefetch_related('points', 'points__panorama', 'points__panorama__markers').all()
+    queryset = EvacPlan.objects.all()
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -82,6 +84,13 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
         floor = self.request.query_params.get('floor')
         if floor:
             qs = qs.filter(floor=floor)
+        marker_qs = self._marker_queryset_for_request()
+        qs = qs.prefetch_related(
+            'points',
+            'points__panorama',
+            Prefetch('points__panorama__markers', queryset=marker_qs),
+            Prefetch('points__panorama__markers__tours'),
+        )
         return qs.distinct()
 
     def perform_create(self, serializer):
@@ -97,6 +106,38 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
             serializer.save(image=cropped)
         else:
             serializer.save()
+
+    def _marker_queryset_for_request(self):
+        user = getattr(self.request, 'user', None)
+        tour_id = self.request.query_params.get('tour')
+        include_info_raw = self.request.query_params.get('include_info')
+        include_info = str(include_info_raw).lower() in ('1', 'true', 'yes', 'on')
+        base_qs = PanoramaMarker.objects.select_related('panorama', 'target_point', 'panorama__point')
+
+        # Для редактора (staff): иногда нужно получить все маркеры без фильтрации.
+        if include_info and user and user.is_authenticated and user.is_staff:
+            return base_qs
+
+        # "Без тура": для всех ролей скрываем информационные метки
+        # (возвращаем только переходные маркеры).
+        if not tour_id:
+            return base_qs.filter(type=PanoramaMarker.MarkerType.TRANSITION)
+
+        if not user or not user.is_authenticated:
+            return base_qs.filter(type=PanoramaMarker.MarkerType.TRANSITION)
+
+        if user.is_staff:
+            if tour_id:
+                return base_qs.filter(Q(type=PanoramaMarker.MarkerType.TRANSITION) | Q(tours__id=tour_id)).distinct()
+            return base_qs.filter(type=PanoramaMarker.MarkerType.TRANSITION)
+
+        # authenticated but not staff
+        if tour_id:
+            return base_qs.filter(
+                Q(type=PanoramaMarker.MarkerType.TRANSITION)
+                | Q(type=PanoramaMarker.MarkerType.INFO, tours__id=tour_id)
+            ).distinct()
+        return base_qs.filter(type=PanoramaMarker.MarkerType.TRANSITION)
 
 
 class MapPointViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
@@ -141,7 +182,7 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
 
 
 class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
-    queryset = PanoramaMarker.objects.select_related('panorama', 'target_point', 'panorama__point').all()
+    queryset = PanoramaMarker.objects.select_related('panorama', 'target_point', 'panorama__point').prefetch_related('tours').all()
     serializer_class = PanoramaMarkerSerializer
 
     def get_queryset(self):
@@ -150,6 +191,27 @@ class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
         if panorama_id:
             qs = qs.filter(panorama_id=panorama_id)
         return qs
+
+
+class TourViewSet(viewsets.ModelViewSet):
+    queryset = Tour.objects.select_related('plan').prefetch_related('markers')
+    serializer_class = TourSerializer
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsAdminUser]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        plan_id = self.request.query_params.get('plan')
+        if plan_id:
+            qs = qs.filter(plan_id=plan_id)
+        if not self.request.user.is_staff:
+            qs = qs.filter(is_active=True)
+        return qs.order_by('plan_id', 'title')
 
 
 class UserViewSet(viewsets.ModelViewSet):

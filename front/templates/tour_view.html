@@ -28,6 +28,14 @@
     </div>
 
     <button class="tv-back" id="tvBack" type="button" onclick="history.back()">← Назад</button>
+    {% if is_auth %}
+    <div class="tv-toolbar">
+        <label class="tv-tour-select">
+            Тур:
+            <select id="tvTourSelect"></select>
+        </label>
+    </div>
+    {% endif %}
 
     <div class="tv-info-overlay" id="tvInfoOverlay">
         <div class="tv-info-card">
@@ -40,6 +48,8 @@
 
 <script>
     window.TOUR_PLAN_ID = Number('{{ plan_id }}');
+    window.IS_AUTH = {{ is_auth|yesno:"true,false" }};
+    window.IS_STAFF = {{ is_staff|yesno:"true,false" }};
 </script>
 <script src="{% static 'js/tour_viewer.js' %}"></script>
 </body>

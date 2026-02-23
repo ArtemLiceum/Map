@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .jwt import EmailTokenObtainPairView
 from .views import (
     EvacPlanViewSet, MapPointViewSet,
-    PanoramaViewSet, PanoramaMarkerViewSet,
+    PanoramaViewSet, PanoramaMarkerViewSet, TourViewSet,
     UserViewSet, GroupViewSet, PermissionViewSet,
 )
 
@@ -14,6 +14,7 @@ router.register(r'evac_plans', EvacPlanViewSet)
 router.register(r'map_points', MapPointViewSet)
 router.register(r'panoramas', PanoramaViewSet)
 router.register(r'panorama_markers', PanoramaMarkerViewSet)
+router.register(r'tours', TourViewSet)
 router.register(r'users', UserViewSet)
 router.register(r'groups', GroupViewSet)
 router.register(r'permissions', PermissionViewSet)

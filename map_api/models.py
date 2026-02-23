@@ -130,3 +130,58 @@ class PanoramaMarker(models.Model):
             raise ValidationError({"target_point": "Целевая точка обязательна для переходной метки."})
         if self.type == self.MarkerType.INFO and self.target_point:
             raise ValidationError({"target_point": "Для информационной метки целевая точка должна быть пустой."})
+
+
+class Tour(models.Model):
+    """Маршрут внутри плана (виртуального тура)"""
+    plan = models.ForeignKey(EvacPlan, related_name='tours', on_delete=models.CASCADE)
+    title = models.CharField(max_length=200, verbose_name="Название тура")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    created_at = models.DateTimeField(auto_now_add=True)
+    markers = models.ManyToManyField(
+        PanoramaMarker,
+        related_name='tours',
+        blank=True,
+        through='TourMarker',
+    )
+
+    class Meta:
+        ordering = ['plan_id', 'title']
+        verbose_name = "Тур"
+        verbose_name_plural = "Туры"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plan', 'title'],
+                name='tour_unique_plan_title',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.plan.title}: {self.title}"
+
+
+class TourMarker(models.Model):
+    """Связь тура с информационными маркерами панорам"""
+    tour = models.ForeignKey(Tour, related_name='tour_markers', on_delete=models.CASCADE)
+    marker = models.ForeignKey(PanoramaMarker, related_name='tour_markers', on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = "Метка тура"
+        verbose_name_plural = "Метки тура"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tour', 'marker'],
+                name='tourmarker_unique_tour_marker',
+            ),
+        ]
+
+    def clean(self):
+        """Только информационные маркеры можно добавлять в тур."""
+        super().clean()
+        if self.marker_id and self.marker.type != PanoramaMarker.MarkerType.INFO:
+            raise ValidationError(
+                {"marker": "В тур можно добавлять только информационные маркеры (type=info)."}
+            )
+
+    def __str__(self):
+        return f"{self.tour} ↔ {self.marker}"

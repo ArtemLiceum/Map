@@ -1,5 +1,7 @@
 (function () {
   const PLAN_ID = window.TOUR_PLAN_ID;
+  const IS_AUTH = !!window.IS_AUTH;
+  const IS_STAFF = !!window.IS_STAFF;
   if (!PLAN_ID) return;
 
   const panoramaEl = document.getElementById('tvPanoramaImage');
@@ -15,6 +17,7 @@
   const infoOverlayTitle = document.getElementById('tvInfoTitle');
   const infoOverlayText = document.getElementById('tvInfoText');
   const infoOverlayClose = document.getElementById('tvInfoClose');
+  const tourSelect = document.getElementById('tvTourSelect');
 
   const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
 
@@ -37,7 +40,9 @@
     rafPending: false,
     inertiaHandle: null,
     markers: [],
-    viewportW: window.innerWidth
+    viewportW: window.innerWidth,
+    tours: [],
+    selectedTourId: null
   };
 
   function setLoader(text, visible = true) {
@@ -50,9 +55,12 @@
     fadeEl && fadeEl.classList.toggle('active', !!on);
   }
 
-  async function fetchPlan(planId) {
+  async function fetchPlan(planId, tourId = null) {
     setLoader('Загрузка тура...', true);
-    const res = await fetch(`/api/evac_plans/${planId}/`);
+    const url = tourId
+      ? `/api/evac_plans/${planId}/?tour=${tourId}`
+      : `/api/evac_plans/${planId}/`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Не удалось загрузить тур');
     const plan = await res.json();
     state.plan = plan;
@@ -65,6 +73,50 @@
       setLoader('Нет точек с панорамами', true);
     }
     setLoader('', false);
+  }
+
+  async function loadTours() {
+    if (!IS_AUTH || !tourSelect) return;
+    try {
+      const res = await fetch(`/api/tours/?plan=${PLAN_ID}`);
+      if (!res.ok) throw new Error('Не удалось загрузить туры');
+      const list = await res.json();
+      state.tours = Array.isArray(list) ? list : [];
+      if (!state.selectedTourId && state.tours.length) {
+        const firstActive = state.tours.find(t => t.is_active) || state.tours[0];
+        state.selectedTourId = firstActive?.id ?? null;
+      }
+      renderTourSelect();
+    } catch (err) {
+      console.warn(err);
+      state.tours = [];
+      renderTourSelect();
+    }
+  }
+
+  function renderTourSelect() {
+    if (!tourSelect) return;
+    tourSelect.innerHTML = '';
+    if (!state.tours.length) {
+      const opt = document.createElement('option');
+      opt.textContent = 'Туры не найдены';
+      opt.value = '';
+      tourSelect.appendChild(opt);
+      tourSelect.disabled = true;
+      return;
+    }
+    tourSelect.disabled = false;
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = 'Без тура';
+    tourSelect.appendChild(emptyOpt);
+    state.tours.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = String(t.id);
+      opt.textContent = `${t.title}${t.is_active ? '' : ' (неактивен)'}`;
+      tourSelect.appendChild(opt);
+    });
+    tourSelect.value = state.selectedTourId ? String(state.selectedTourId) : '';
   }
 
   function pickInitialPointId(points) {
@@ -113,7 +165,11 @@
 
   function buildNavMarkers(markers) {
     markersLayer.innerHTML = '';
-    state.markers = markers.map(m => {
+    const effectiveMarkers = state.selectedTourId
+      ? markers
+      : markers.filter(m => m.type !== 'info');
+
+    state.markers = effectiveMarkers.map(m => {
       const el = document.createElement('button');
       const isInfo = m.type === 'info';
       el.className = 'tv-nav-marker' + (isInfo ? ' is-info' : '');
@@ -340,6 +396,16 @@
     infoOverlay?.addEventListener('click', (ev) => {
       if (ev.target === infoOverlay) hideInfoOverlay();
     });
+
+    tourSelect?.addEventListener('change', () => {
+      const val = tourSelect.value;
+      state.selectedTourId = val ? Number(val) : null;
+      hideInfoOverlay();
+      fetchPlan(PLAN_ID, state.selectedTourId).catch(err => {
+        console.error(err);
+        setLoader(err.message || 'Ошибка загрузки', true);
+      });
+    });
   }
 
   function showInfoOverlay(marker) {
@@ -355,7 +421,13 @@
 
   function init() {
     initEvents();
-    fetchPlan(PLAN_ID).catch(err => {
+    const load = async () => {
+      if (IS_AUTH && tourSelect) {
+        await loadTours();
+      }
+      await fetchPlan(PLAN_ID, state.selectedTourId);
+    };
+    load().catch(err => {
       console.error(err);
       setLoader(err.message || 'Ошибка загрузки', true);
       toggleFade(false);

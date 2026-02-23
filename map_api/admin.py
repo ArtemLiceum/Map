@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourMarker
 
 
 class PanoramaMarkerInline(admin.TabularInline):
@@ -49,6 +49,19 @@ class PanoramaMarkerAdmin(admin.ModelAdmin):
     list_display = ('panorama', 'type', 'target_point', 'label', 'azimuth', 'pitch')
     list_filter = ('panorama__point__plan',)
     search_fields = ('label', 'text', 'panorama__point__name', 'target_point__name')
+
+
+@admin.register(Tour)
+class TourAdmin(admin.ModelAdmin):
+    list_display = ('title', 'plan', 'is_active', 'created_at')
+    list_filter = ('plan', 'is_active')
+    search_fields = ('title',)
+
+
+@admin.register(TourMarker)
+class TourMarkerAdmin(admin.ModelAdmin):
+    list_display = ('tour', 'marker')
+    list_filter = ('tour__plan',)
 
 
 # @admin.register(PanoramaInfoPoint)
