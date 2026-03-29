@@ -142,21 +142,26 @@
   position: absolute;
   left: 16px;
   bottom: 16px;
-  width: 220px;
-  height: 220px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   backdrop-filter: blur(6px);
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
 }
 
-.tv-minimap.hidden {
-  transform: translateY(8px);
-  opacity: 0.2;
-  pointer-events: none;
+/* Fallback until JS sizes from image aspect ratio (inline styles override). */
+.tv-minimap:not(.tv-minimap--collapsed) {
+  width: 440px;
+  height: 440px;
+}
+
+.tv-minimap--collapsed {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: 6px;
 }
 
 .tv-minimap-toggle {
@@ -171,6 +176,50 @@
   width: 32px;
   height: 32px;
   cursor: pointer;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.tv-minimap--collapsed .tv-minimap-toggle {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+
+.tv-minimap-zoom {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tv-minimap--collapsed .tv-minimap-zoom {
+  display: none;
+}
+
+.tv-minimap-zoom-btn {
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 18px;
+  padding: 0;
+}
+
+.tv-minimap-zoom-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tv-minimap-zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .tv-minimap-body {
@@ -178,10 +227,15 @@
   inset: 0;
 }
 
+.tv-minimap--collapsed .tv-minimap-body {
+  display: none;
+}
+
 .tv-minimap-img {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: fill;
   opacity: 0.8;
 }
 
@@ -296,9 +350,9 @@
 }
 
 @media (max-width: 600px) {
-  .tv-minimap {
-    width: 180px;
-    height: 180px;
+  .tv-minimap:not(.tv-minimap--collapsed) {
+    width: 360px;
+    height: 360px;
   }
   .tv-nav-marker {
     width: 40px;

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -20,13 +21,15 @@ from .config import(
     ACCESS_TOKEN_LIFETIME,
     REFRESH_TOKEN_LIFETIME,
     SIGNING_KEY,
+    SECRET_KEY as CONFIG_SECRET_KEY,
     DB_ENGINE,
     DB_HOST,
     DB_NAME,
     DB_PASSWORD,
     DB_PORT,
     DB_USER,
-    DEBUG,
+    DB_SSLMODE,
+    DEBUG as CONFIG_DEBUG,
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,13 +40,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-v!l)$=@vw!j-on&2%t&k#&yr^)%ixj+-11um)1du-hajdw4+!p'
+SECRET_KEY = CONFIG_SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = CONFIG_DEBUG
 
 ALLOWED_HOSTS = ["*"]
 
+# Доверенные origins для CSRF (через туннель: задаётся entrypoint или .env)
+_extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [s.strip() for s in _extra_csrf.split(",") if s.strip()]
 
 # Application definition
 
@@ -108,6 +114,7 @@ DATABASES = {
         "PASSWORD": DB_PASSWORD,
         "HOST": DB_HOST,
         "PORT": DB_PORT,
+        **({"OPTIONS": {"sslmode": DB_SSLMODE}} if DB_SSLMODE else {}),
     }
 }
 

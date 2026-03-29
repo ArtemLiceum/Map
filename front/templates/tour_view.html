@@ -18,8 +18,12 @@
     </div>
 
     <div class="tv-minimap" id="tvMinimap">
-        <button class="tv-minimap-toggle" id="tvMinimapToggle" type="button" aria-pressed="false" aria-label="Скрыть мини-карту">
-            ⤢
+        <div class="tv-minimap-zoom" id="tvMinimapZoom" role="group" aria-label="Масштаб миникарты">
+            <button class="tv-minimap-zoom-btn" id="tvMinimapZoomOut" type="button" aria-label="Уменьшить масштаб миникарты" title="Уменьшить">−</button>
+            <button class="tv-minimap-zoom-btn" id="tvMinimapZoomIn" type="button" aria-label="Увеличить масштаб миникарты" title="Увеличить">+</button>
+        </div>
+        <button class="tv-minimap-toggle" id="tvMinimapToggle" type="button" aria-expanded="true" aria-label="Свернуть мини-карту">
+            −
         </button>
         <div class="tv-minimap-body" id="tvMinimapBody">
             <img id="tvMinimapImage" alt="План" class="tv-minimap-img">

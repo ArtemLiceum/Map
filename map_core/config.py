@@ -19,6 +19,7 @@ DB_USER = getenv("DB_USER")
 DB_PASSWORD = getenv("DB_PASSWORD")
 DB_HOST = getenv("DB_HOST")
 DB_PORT = getenv("DB_PORT")
+DB_SSLMODE = getenv("DB_SSLMODE")
 
 # SimpleJWT settings
 ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(getenv("ACCESS_TOKEN_LIFETIME", 5)))

@@ -12,6 +12,8 @@
   const minimapImgEl = document.getElementById('tvMinimapImage');
   const minimapPointsEl = document.getElementById('tvMinimapPoints');
   const minimapToggleEl = document.getElementById('tvMinimapToggle');
+  const minimapZoomOutEl = document.getElementById('tvMinimapZoomOut');
+  const minimapZoomInEl = document.getElementById('tvMinimapZoomIn');
   const panoramaContainer = document.getElementById('tvPanorama');
   const infoOverlay = document.getElementById('tvInfoOverlay');
   const infoOverlayTitle = document.getElementById('tvInfoTitle');
@@ -24,6 +26,9 @@
   const tourProgressBarFill = document.getElementById('tvTourProgressBarFill');
 
   const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
+  const MINIMAP_MAX_DEFAULT = 440;
+  const MINIMAP_MAX_MOBILE = 360;
+  const MINIMAP_ZOOM_LEVELS = [1, 1.5, 2];
 
   const state = {
     plan: null,
@@ -46,7 +51,9 @@
     markers: [],
     viewportW: window.innerWidth,
     tours: [],
-    selectedTourId: null
+    selectedTourId: null,
+    minimapCollapsed: false,
+    minimapZoom: 1
   };
 
   function setLoader(text, visible = true) {
@@ -394,9 +401,60 @@
     });
   }
 
+  function getMinimapMaxSize() {
+    return window.innerWidth <= 600 ? MINIMAP_MAX_MOBILE : MINIMAP_MAX_DEFAULT;
+  }
+
+  /** Fit natural image size into a max square (and viewport), preserving aspect ratio. */
+  function fitMinimapBox(nw, nh) {
+    const cap = getMinimapMaxSize() * state.minimapZoom;
+    const margin = 32;
+    const maxW = Math.min(cap, Math.max(60, window.innerWidth - margin));
+    const maxH = Math.min(cap, Math.max(60, window.innerHeight - margin));
+    if (!nw || !nh) return { w: maxW, h: maxH };
+    const scale = Math.min(maxW / nw, maxH / nh);
+    return { w: nw * scale, h: nh * scale };
+  }
+
+  function applyMinimapDimensions() {
+    if (!minimapEl) return;
+    if (state.minimapCollapsed) {
+      updateMinimapZoomButtons();
+      return;
+    }
+    const nw = minimapImgEl.naturalWidth;
+    const nh = minimapImgEl.naturalHeight;
+    if (!nw || !nh) {
+      updateMinimapZoomButtons();
+      return;
+    }
+    const { w } = fitMinimapBox(nw, nh);
+    minimapEl.style.aspectRatio = `${nw} / ${nh}`;
+    minimapEl.style.width = `${w}px`;
+    minimapEl.style.height = 'auto';
+    updateMinimapZoomButtons();
+  }
+
+  function updateMinimapZoomButtons() {
+    if (!minimapZoomInEl || !minimapZoomOutEl) return;
+    const idx = MINIMAP_ZOOM_LEVELS.indexOf(state.minimapZoom);
+    const collapsed = state.minimapCollapsed;
+    minimapZoomOutEl.disabled = collapsed || idx <= 0;
+    minimapZoomInEl.disabled = collapsed || idx >= MINIMAP_ZOOM_LEVELS.length - 1;
+  }
+
+  function nudgeMinimapZoom(delta) {
+    if (state.minimapCollapsed) return;
+    const idx = MINIMAP_ZOOM_LEVELS.indexOf(state.minimapZoom);
+    const next = MINIMAP_ZOOM_LEVELS[idx + delta];
+    if (next === undefined) return;
+    state.minimapZoom = next;
+    applyMinimapDimensions();
+  }
+
   function renderMinimap() {
     if (!state.plan) return;
-    minimapImgEl.src = state.plan.image;
+    state.minimapZoom = 1;
     minimapPointsEl.innerHTML = '';
     state.points.forEach(p => {
       const btn = document.createElement('button');
@@ -410,6 +468,15 @@
       minimapPointsEl.appendChild(btn);
     });
     highlightMinimap(state.activePointId);
+
+    const onMinimapImgReady = () => {
+      applyMinimapDimensions();
+    };
+    minimapImgEl.onload = onMinimapImgReady;
+    minimapImgEl.src = state.plan.image;
+    if (minimapImgEl.complete && minimapImgEl.naturalWidth) {
+      onMinimapImgReady();
+    }
   }
 
   function highlightMinimap(activeId) {
@@ -424,6 +491,7 @@
     state.viewportW = panoramaContainer.clientWidth || window.innerWidth;
     recalcScaledTile();
     scheduleRender();
+    applyMinimapDimensions();
   }
 
   function initEvents() {
@@ -448,10 +516,26 @@
     });
 
     minimapToggleEl.addEventListener('click', () => {
-      const hidden = minimapEl.classList.toggle('hidden');
-      minimapToggleEl.setAttribute('aria-pressed', hidden ? 'true' : 'false');
-      minimapToggleEl.textContent = hidden ? '⤢' : '⤡';
+      state.minimapCollapsed = !state.minimapCollapsed;
+      minimapEl.classList.toggle('tv-minimap--collapsed', state.minimapCollapsed);
+      minimapToggleEl.setAttribute('aria-expanded', state.minimapCollapsed ? 'false' : 'true');
+      minimapToggleEl.setAttribute(
+        'aria-label',
+        state.minimapCollapsed ? 'Развернуть мини-карту' : 'Свернуть мини-карту'
+      );
+      minimapToggleEl.textContent = state.minimapCollapsed ? '▣' : '−';
+      if (state.minimapCollapsed) {
+        minimapEl.style.width = '';
+        minimapEl.style.height = '';
+        minimapEl.style.aspectRatio = '';
+      } else {
+        applyMinimapDimensions();
+      }
+      updateMinimapZoomButtons();
     });
+
+    minimapZoomOutEl?.addEventListener('click', () => nudgeMinimapZoom(-1));
+    minimapZoomInEl?.addEventListener('click', () => nudgeMinimapZoom(1));
 
     infoOverlayClose?.addEventListener('click', hideInfoOverlay);
     infoOverlay?.addEventListener('click', (ev) => {

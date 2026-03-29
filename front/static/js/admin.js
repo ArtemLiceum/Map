@@ -207,6 +207,29 @@ async function updateTour(id, payload) {
   return await res.json();
 }
 
+async function deleteTourRequest(id) {
+  const res = await apiFetch(`${API.createTour}${id}/`, { method: 'DELETE' });
+  if (res.status === 403) {
+    throw new Error('Нет прав или CSRF-токен отсутствует. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Ошибка удаления тура');
+  return true;
+}
+
+window.deleteTour = async function (tourId) {
+  const tour = state.tours.find(t => t.id === tourId);
+  if (!tour) return;
+  if (!confirm(`Удалить тур «${t.title}»?`)) return;
+  try {
+    await deleteTourRequest(tourId);
+    state.tours = state.tours.filter(t => t.id !== tourId);
+    saveState();
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось удалить тур');
+  }
+};
+
 // --- LocalStorage ---
 function loadState() {
   try { const raw = localStorage.getItem(LS_KEY); if(raw) state = JSON.parse(raw); } catch(e){console.warn(e);}
@@ -553,6 +576,7 @@ function renderTours() {
       <b>${t.title}</b> ${t.is_active ? '🟢' : '⚪️'}
       <button onclick="renameTour(${t.id})">✏️</button>
       <button onclick="toggleTour(${t.id})">${t.is_active ? 'Деактивировать' : 'Активировать'}</button>
+      <button onclick="deleteTour(${t.id})" type="button" title="Удалить тур">🗑️</button>
     </div>
   `).join('');
 }
