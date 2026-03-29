@@ -54,6 +54,18 @@ h1 { font-size: 20px; }
   min-height: 120px;
 }
 
+/* Редактор плана эвакуации: заголовок — класс .page-hero-title в style.css; крупнее подписи в панелях */
+.admin-evac-editor .panel label {
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.admin-evac-editor .panel .small,
+.admin-evac-editor .panel .hint {
+  font-size: 15px;
+  color: #4b5563;
+}
+
 #planWrap { position: relative; display: inline-block; border: 1px solid #ddd; }
 #plan { max-width: 100%; height: auto; display: block; }
 
@@ -72,6 +84,8 @@ h1 { font-size: 20px; }
   justify-content: center;
   color: #fff;
   font-weight: 600;
+  font-size: 15px;
+  line-height: 1;
 }
 .marker.dragging {
   cursor: grabbing;
@@ -95,11 +109,18 @@ h1 { font-size: 20px; }
 .hint { font-size: 13px; color: #666; margin-top: 8px; }
 .hidden { display: none !important; }
 
+/* Списки точек и туров: крупнее текст; кнопки ниже — компактнее и чуть мельче эмодзи */
+#pointsList,
+#toursList {
+  font-size: 16px;
+  color: #374151;
+}
+
 /* Список точек / туры: текст слева, кнопки справа */
 .admin-list-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -109,15 +130,29 @@ h1 { font-size: 20px; }
 .admin-list-row__meta {
   flex: 1;
   min-width: 0;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .admin-list-row__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+}
+.admin-list-row__actions button {
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 5px;
+  color: inherit;
+}
+.admin-list-row__actions button:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 .admin-section-actions {
   text-align: right;
