@@ -27,6 +27,21 @@ const panoramaModal = document.getElementById('panoramaModal');
 const panoramaView = document.getElementById('panoramaView');
 const panoramaTitle = document.getElementById('panoramaTitle');
 const closePanoramaBtn = document.getElementById('closePanoramaBtn');
+const markerModal = document.getElementById('markerModal');
+const markerModalTitle = document.getElementById('markerModalTitle');
+const markerType = document.getElementById('markerType');
+const markerTransitionFields = document.getElementById('markerTransitionFields');
+const markerInfoFields = document.getElementById('markerInfoFields');
+const markerLabel = document.getElementById('markerLabel');
+const targetSearch = document.getElementById('targetSearch');
+const targetPointSelect = document.getElementById('targetPointSelect');
+const infoLabel = document.getElementById('infoLabel');
+const infoText = document.getElementById('infoText');
+const infoTours = document.getElementById('infoTours');
+const infoToursHint = document.getElementById('infoToursHint');
+const markerSaveBtn = document.getElementById('markerSaveBtn');
+const markerDeleteBtn = document.getElementById('markerDeleteBtn');
+const markerCancelBtn = document.getElementById('markerCancelBtn');
 const planCropExistingBtn = document.getElementById('planCropExistingBtn');
 const panoramaCropBtn = document.getElementById('panoramaCropBtn');
 const panoramaReplaceBtn = document.getElementById('panoramaReplaceBtn');
@@ -44,6 +59,7 @@ let cropper = null;
 let tempPointCoords = null;
 let editingPoint = null;
 let lastDragAt = 0;
+let markerDraft = null;
 
 // --- API helpers ---
 function getCookie(name) {
@@ -575,6 +591,13 @@ function parseTourIds(input) {
     .filter(n => Number.isFinite(n));
 }
 
+function getSelectedValuesAsInt(selectEl) {
+  if (!selectEl) return [];
+  return Array.from(selectEl.selectedOptions || [])
+    .map(opt => parseInt(opt.value, 10))
+    .filter(n => Number.isFinite(n));
+}
+
 function clamp(num, min, max) {
   return Math.min(Math.max(num, min), max);
 }
@@ -837,125 +860,220 @@ async function openPanorama(point){
     });
   }
 
-  img.addEventListener('click', async ev => {
+  function closeMarkerModal() {
+    markerDraft = null;
+    markerModal.style.display = 'none';
+  }
+
+  function updateMarkerTypeFieldsVisibility() {
+    const isTransition = markerType.value === 'transition';
+    markerTransitionFields.classList.toggle('hidden', !isTransition);
+    markerInfoFields.classList.toggle('hidden', isTransition);
+  }
+
+  function populateTargetPointsSelect(selectedId = null) {
+    const query = (targetSearch.value || '').trim().toLowerCase();
+    const currentSelection = Number.isFinite(selectedId) ? selectedId : parseInt(targetPointSelect.value, 10);
+    const points = state.points.filter(p => {
+      if (!query) return true;
+      return (p.name || '').toLowerCase().includes(query);
+    });
+    targetPointSelect.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = points.length ? 'Выберите точку' : 'Нет подходящих точек';
+    targetPointSelect.appendChild(placeholder);
+
+    points.forEach(p => {
+      const option = document.createElement('option');
+      option.value = String(p.id);
+      option.textContent = p.name ? `${p.name} (ID: ${p.id})` : `Точка ${p.id}`;
+      if (p.id === currentSelection) option.selected = true;
+      targetPointSelect.appendChild(option);
+    });
+  }
+
+  function populateInfoToursSelect(selectedTours = []) {
+    infoTours.innerHTML = '';
+    if (!state.tours.length) {
+      infoTours.disabled = true;
+      infoToursHint.textContent = 'Туры не созданы. Метка будет доступна без привязки к туру.';
+      return;
+    }
+    infoTours.disabled = false;
+    infoToursHint.textContent = '';
+    const selectedSet = new Set((selectedTours || []).map(Number).filter(Number.isFinite));
+    state.tours.forEach(t => {
+      const option = document.createElement('option');
+      option.value = String(t.id);
+      option.textContent = `${t.title}${t.is_active ? '' : ' (неактивен)'}`;
+      option.selected = selectedSet.has(t.id);
+      infoTours.appendChild(option);
+    });
+  }
+
+  function fillMarkerModalForCreate(sourcePoint, azimuth, pitch) {
+    markerDraft = {
+      mode: 'create',
+      sourcePointId: sourcePoint.id,
+      panoramaId: sourcePoint.panorama.id,
+      markerId: null,
+      azimuth,
+      pitch
+    };
+    markerModalTitle.textContent = 'Новая метка';
+    markerSaveBtn.textContent = 'Создать';
+    markerDeleteBtn.style.display = 'none';
+
+    markerType.value = 'transition';
+    markerLabel.value = '';
+    targetSearch.value = '';
+    populateTargetPointsSelect(null);
+
+    infoLabel.value = '';
+    infoText.value = '';
+    const activeTourIds = (state.tours || []).filter(t => t.is_active).map(t => t.id);
+    populateInfoToursSelect(activeTourIds);
+    updateMarkerTypeFieldsVisibility();
+  }
+
+  function fillMarkerModalForEdit(sourcePoint, marker) {
+    markerDraft = {
+      mode: 'edit',
+      sourcePointId: sourcePoint.id,
+      panoramaId: sourcePoint.panorama.id,
+      markerId: marker.id,
+      azimuth: marker.azimuth,
+      pitch: marker.pitch
+    };
+    markerModalTitle.textContent = 'Редактирование метки';
+    markerSaveBtn.textContent = 'Сохранить';
+    markerDeleteBtn.style.display = 'inline-block';
+
+    markerType.value = marker.type || 'transition';
+    markerLabel.value = marker.label || '';
+    targetSearch.value = '';
+    populateTargetPointsSelect(marker.target_point || null);
+
+    infoLabel.value = marker.label || '';
+    infoText.value = marker.text || '';
+    populateInfoToursSelect(marker.tours || []);
+    updateMarkerTypeFieldsVisibility();
+  }
+
+  function collectMarkerPayload() {
+    const type = markerType.value;
+    if (!['transition', 'info'].includes(type)) {
+      throw new Error('Некорректный тип метки');
+    }
+    if (type === 'transition') {
+      const targetId = parseInt(targetPointSelect.value, 10);
+      if (!targetId || !state.points.find(p => p.id === targetId)) {
+        throw new Error('Выберите корректную целевую точку');
+      }
+      return {
+        type: 'transition',
+        target_point: targetId,
+        label: (markerLabel.value || '').trim(),
+        text: '',
+        tours: []
+      };
+    }
+
+    return {
+      type: 'info',
+      target_point: null,
+      label: (infoLabel.value || '').trim(),
+      text: (infoText.value || '').trim(),
+      tours: getSelectedValuesAsInt(infoTours)
+    };
+  }
+
+  markerType.onchange = () => {
+    updateMarkerTypeFieldsVisibility();
+  };
+  targetSearch.oninput = () => {
+    populateTargetPointsSelect();
+  };
+  markerCancelBtn.onclick = closeMarkerModal;
+
+  markerSaveBtn.onclick = async () => {
+    if (!markerDraft) return;
+    const sourcePoint = state.points.find(p => p.id === markerDraft.sourcePointId);
+    if (!sourcePoint?.panorama) return;
+
+    try {
+      const payload = collectMarkerPayload();
+      if (markerDraft.mode === 'create') {
+        const created = await createPanoramaMarker({
+          panorama: markerDraft.panoramaId,
+          azimuth: markerDraft.azimuth,
+          pitch: markerDraft.pitch,
+          ...payload
+        });
+        sourcePoint.panorama.markers.push(created);
+      } else {
+        const updated = await updatePanoramaMarker(markerDraft.markerId, payload);
+        const idx = sourcePoint.panorama.markers.findIndex(m => m.id === markerDraft.markerId);
+        if (idx >= 0) sourcePoint.panorama.markers[idx] = updated;
+      }
+      closeMarkerModal();
+      renderPanMarkers();
+    } catch (err) {
+      alert(err.message || 'Не удалось сохранить метку');
+    }
+  };
+
+  markerDeleteBtn.onclick = async () => {
+    if (!markerDraft || markerDraft.mode !== 'edit') return;
+    if (!confirm('Удалить метку?')) return;
+    const sourcePoint = state.points.find(p => p.id === markerDraft.sourcePointId);
+    if (!sourcePoint?.panorama) return;
+
+    try {
+      await deletePanoramaMarker(markerDraft.markerId);
+      sourcePoint.panorama.markers = sourcePoint.panorama.markers.filter(m => m.id !== markerDraft.markerId);
+      closeMarkerModal();
+      renderPanMarkers();
+    } catch (err) {
+      alert(err.message || 'Не удалось удалить метку');
+    }
+  };
+
+  img.addEventListener('click', ev => {
+    if (markerModal.style.display === 'flex') return;
     const w = img.offsetWidth;
     const h = img.offsetHeight;
     const xfrac = ev.offsetX / w;
     const yfrac = ev.offsetY / (h || 1);
-    const azimuth = +(xfrac*360).toFixed(2);
+    const azimuth = +(xfrac * 360).toFixed(2);
     const pitch = +((clamp(yfrac, 0, 1) * 180) - 90).toFixed(2);
-    const markerType = (prompt('Тип метки: transition (переход) или info (инфо)', 'transition') || '').trim();
-    if(!['transition','info'].includes(markerType)) return alert('Некорректный тип метки');
-
-    let targetId = null;
-    let label = '';
-    let text = '';
-    let tours = [];
-
-    if(markerType === 'transition'){
-      const options = state.points.map(p=>`${p.id}:${p.name}`).join('\n');
-      targetId = parseInt(prompt(`Выберите целевую точку (ID:Name)\n${options}`));
-      if(!targetId || !state.points.find(p=>p.id===targetId)) return alert('Некорректная точка');
-      label = prompt('Подпись перехода (необязательно)', '') || '';
-    } else {
-      label = prompt('Заголовок информационной точки', '') || '';
-      text = prompt('Текст информационной точки', '') || '';
-      const tourOptions = (state.tours || []).map(t => `${t.id}:${t.title}${t.is_active ? '' : ' (неактивен)'}`).join('\n');
-      if (state.tours?.length) {
-        const toursInput = prompt(`Укажите туры (id через запятую)\n${tourOptions}`, (state.tours.filter(t=>t.is_active).map(t=>t.id)).join(','));
-        tours = parseTourIds(toursInput);
-      } else {
-        tours = [];
-      }
-    }
-
-    const newMarker = await createPanoramaMarker({
-      panorama: point.panorama.id,
-      type: markerType,
-      target_point: targetId,
-      azimuth,
-      pitch,
-      label,
-      text,
-      tours
-    });
-    point.panorama.markers.push(newMarker);
-    renderPanMarkers();
+    fillMarkerModalForCreate(point, azimuth, pitch);
+    markerModal.style.display = 'flex';
   });
 
-  closePanoramaBtn.onclick = () => { panoramaModal.style.display='none'; }
+  closePanoramaBtn.onclick = () => {
+    panoramaModal.style.display = 'none';
+    closeMarkerModal();
+  };
 
   async function onMarkerClick(marker, sourcePoint){
-    const action = prompt('Действие: o - перейти, e - редактировать, d - удалить', marker.type === 'transition' ? 'o' : 'e');
-    if(!action) return;
-    if(action.toLowerCase() === 'd'){
-      if(!confirm('Удалить метку?')) return;
-      try{
-        await deletePanoramaMarker(marker.id);
-        sourcePoint.panorama.markers = sourcePoint.panorama.markers.filter(m => m.id !== marker.id);
-        renderPanMarkers();
-      }catch(err){
-        alert(err.message);
-      }
-      return;
-    }
-    if(action.toLowerCase() === 'o'){
-      if(marker.type !== 'transition'){
-        alert(marker.text || marker.label || 'Информационная метка');
-        return;
-      }
-      const target = state.points.find(p => p.id===marker.target_point);
-      if(target) openPanorama(target); else alert('Целевая точка не найдена');
-      return;
-    }
-    if(action.toLowerCase() === 'e'){
-      await editMarker(marker, sourcePoint);
-    }
-  }
-
-  async function editMarker(marker, sourcePoint){
-    const newType = (prompt('Тип метки (transition/info)', marker.type) || '').trim();
-    if(!['transition','info'].includes(newType)) return alert('Некорректный тип');
-
-    let payload = { type: newType };
-
-    if(newType === 'transition'){
-      const options = state.points.map(p=>`${p.id}:${p.name}`).join('\n');
-      const targetId = parseInt(prompt(`Выберите целевую точку (ID:Name)\n${options}`, marker.target_point || ''));
-      if(!targetId || !state.points.find(p=>p.id===targetId)) return alert('Некорректная точка');
-      const label = prompt('Подпись перехода', marker.label || '') || '';
-      payload = { ...payload, target_point: targetId, label, text: '', tours: [] };
-    } else {
-      const label = prompt('Заголовок инфо-точки', marker.label || '') || '';
-      const text = prompt('Текст инфо-точки', marker.text || '') || '';
-      const tourOptions = (state.tours || []).map(t => `${t.id}:${t.title}${t.is_active ? '' : ' (неактивен)'}`).join('\n');
-      let tours = [];
-      if (state.tours?.length) {
-        const toursInput = prompt(`Укажите туры (id через запятую)\n${tourOptions}`, (marker.tours || []).join(','));
-        tours = parseTourIds(toursInput);
-      }
-      payload = { ...payload, target_point: null, label, text, tours };
-    }
-
-    try{
-      const updated = await updatePanoramaMarker(marker.id, payload);
-      const idx = sourcePoint.panorama.markers.findIndex(m => m.id === marker.id);
-      if(idx>=0) sourcePoint.panorama.markers[idx] = updated;
-      renderPanMarkers();
-    }catch(err){
-      alert(err.message);
-    }
+    fillMarkerModalForEdit(sourcePoint, marker);
+    markerModal.style.display = 'flex';
   }
 }
 
-// --- close modals on background click ---
-document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => {
-  if(e.target===m){
-    if (m === cropModal) {
-      closeCropper();
-    } else {
-      m.style.display='none';
-    }
+// --- close modals on background press ---
+// Note: on Safari/macOS, interacting with native <select> dropdowns can sometimes
+// dispatch a "click" on the underlying overlay. Using pointerdown avoids
+// accidental closes when choosing options inside a modal.
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('pointerdown', e => {
+  if (e.target !== m) return;
+  if (m === cropModal) {
+    closeCropper();
+  } else {
+    m.style.display = 'none';
   }
 }));
 

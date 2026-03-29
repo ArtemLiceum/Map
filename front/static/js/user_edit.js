@@ -47,6 +47,9 @@ const newPasswordEl = document.getElementById('newPassword');
 const newPasswordConfirmEl = document.getElementById('newPasswordConfirm');
 const globalErrorEl = document.getElementById('globalError');
 const passwordErrorEl = document.getElementById('passwordError');
+const tourProgressState = document.getElementById('tourProgressState');
+const tourProgressTable = document.getElementById('tourProgressTable');
+const tourProgressTableBody = document.querySelector('#tourProgressTable tbody');
 
 let permissionsCache = [];
 
@@ -105,6 +108,12 @@ async function loadPermissions(search = '') {
   return res.json();
 }
 
+async function loadTourProgress() {
+  const res = await apiFetch(`${API.users}${window.USER_ID}/tour-progress/`);
+  if (!res.ok) throw new Error('Не удалось загрузить прогресс туров');
+  return res.json();
+}
+
 function renderGroups(groups) {
   groupsSelect.innerHTML = '';
   groups.forEach((g) => {
@@ -128,15 +137,45 @@ function renderPermissions(perms) {
 
 async function bootstrap() {
   try {
-    const [user, groups, perms] = await Promise.all([loadUser(), loadGroups(), loadPermissions()]);
+    const [user, groups, perms, tourProgress] = await Promise.all([
+      loadUser(),
+      loadGroups(),
+      loadPermissions(),
+      loadTourProgress(),
+    ]);
     permissionsCache = perms;
     renderGroups(groups);
     renderPermissions(permissionsCache);
     populateUser(user);
+    renderTourProgress(tourProgress);
   } catch (err) {
     console.error(err);
     showError(globalErrorEl, err.message || 'Ошибка загрузки данных');
   }
+}
+
+function renderTourProgress(rows) {
+  if (!tourProgressState || !tourProgressTable || !tourProgressTableBody) return;
+  const data = Array.isArray(rows) ? rows : [];
+  tourProgressTableBody.innerHTML = '';
+  if (!data.length) {
+    tourProgressState.textContent = 'Данных о прогрессе пока нет.';
+    tourProgressTable.style.display = 'none';
+    return;
+  }
+  tourProgressState.textContent = '';
+  tourProgressTable.style.display = 'table';
+  data.forEach((item) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.plan_title || ''}</td>
+      <td>${item.tour_title || ''}</td>
+      <td>${Number(item.viewed || 0)}/${Number(item.total || 0)}</td>
+      <td>${Number(item.percent || 0)}%</td>
+      <td>${formatDate(item.last_viewed_at) || '—'}</td>
+    `;
+    tourProgressTableBody.appendChild(tr);
+  });
 }
 
 function collectSelected(selectEl) {

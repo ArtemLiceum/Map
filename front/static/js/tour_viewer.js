@@ -18,6 +18,10 @@
   const infoOverlayText = document.getElementById('tvInfoText');
   const infoOverlayClose = document.getElementById('tvInfoClose');
   const tourSelect = document.getElementById('tvTourSelect');
+  const tourProgressWrap = document.getElementById('tvTourProgress');
+  const tourProgressTitle = document.getElementById('tvTourProgressTitle');
+  const tourProgressText = document.getElementById('tvTourProgressText');
+  const tourProgressBarFill = document.getElementById('tvTourProgressBarFill');
 
   const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
 
@@ -113,10 +117,66 @@
     state.tours.forEach(t => {
       const opt = document.createElement('option');
       opt.value = String(t.id);
-      opt.textContent = `${t.title}${t.is_active ? '' : ' (неактивен)'}`;
+      const percent = Number.isFinite(Number(t.progress_percent)) ? Number(t.progress_percent) : 0;
+      opt.textContent = `${t.title} — ${percent}%${t.is_active ? '' : ' (неактивен)'}`;
       tourSelect.appendChild(opt);
     });
     tourSelect.value = state.selectedTourId ? String(state.selectedTourId) : '';
+    renderTourProgress();
+  }
+
+  function getSelectedTour() {
+    if (!state.selectedTourId) return null;
+    return state.tours.find(t => t.id === state.selectedTourId) || null;
+  }
+
+  function renderTourProgress() {
+    if (!tourProgressWrap || !tourProgressText || !tourProgressBarFill || !tourProgressTitle) return;
+    const selectedTour = getSelectedTour();
+    if (!selectedTour) {
+      tourProgressWrap.classList.add('hidden');
+      return;
+    }
+    const viewed = Number(selectedTour.progress_viewed || 0);
+    const total = Number(selectedTour.progress_total || 0);
+    const percent = Number.isFinite(Number(selectedTour.progress_percent)) ? Number(selectedTour.progress_percent) : 0;
+    tourProgressTitle.textContent = selectedTour.title || 'Тур';
+    tourProgressText.textContent = `Прогресс: ${percent}% (${viewed}/${total})`;
+    tourProgressBarFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    tourProgressWrap.classList.remove('hidden');
+  }
+
+  async function markInfoMarkerViewed(markerId) {
+    if (!IS_AUTH || !state.selectedTourId) return;
+    try {
+      const res = await fetch(`/api/tours/${state.selectedTourId}/mark-viewed/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken') || ''
+        },
+        body: JSON.stringify({ marker_id: markerId })
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const selectedTour = getSelectedTour();
+      if (!selectedTour) return;
+      selectedTour.progress_viewed = Number(data.viewed || 0);
+      selectedTour.progress_total = Number(data.total || 0);
+      selectedTour.progress_percent = Number(data.percent || 0);
+      renderTourSelect();
+      renderTourProgress();
+    } catch (err) {
+      console.warn(err);
+    }
+  }
+
+  function getCookie(name) {
+    const value = `; ${document.cookie || ''}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
   }
 
   function pickInitialPointId(points) {
@@ -379,6 +439,7 @@
       if (!marker) return;
       const markerData = state.markers.find(({ data }) => String(data.id) === marker.dataset.markerId)?.data;
       if (markerData?.type === 'info') {
+        markInfoMarkerViewed(markerData.id);
         showInfoOverlay(markerData);
         return;
       }
@@ -400,6 +461,7 @@
     tourSelect?.addEventListener('change', () => {
       const val = tourSelect.value;
       state.selectedTourId = val ? Number(val) : null;
+      renderTourProgress();
       hideInfoOverlay();
       fetchPlan(PLAN_ID, state.selectedTourId).catch(err => {
         console.error(err);

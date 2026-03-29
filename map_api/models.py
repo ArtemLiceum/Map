@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -185,3 +186,47 @@ class TourMarker(models.Model):
 
     def __str__(self):
         return f"{self.tour} ↔ {self.marker}"
+
+
+class TourInfoMarkerView(models.Model):
+    """Просмотренная пользователем info-метка внутри конкретного тура."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='tour_info_marker_views',
+        on_delete=models.CASCADE,
+    )
+    tour = models.ForeignKey(
+        Tour,
+        related_name='info_marker_views',
+        on_delete=models.CASCADE,
+    )
+    marker = models.ForeignKey(
+        PanoramaMarker,
+        related_name='tour_views',
+        on_delete=models.CASCADE,
+    )
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Просмотр метки тура"
+        verbose_name_plural = "Просмотры меток туров"
+        indexes = [
+            models.Index(fields=['user', 'tour'], name='tourview_user_tour_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'tour', 'marker'],
+                name='tourview_unique_user_tour_marker',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.marker_id and self.marker.type != PanoramaMarker.MarkerType.INFO:
+            raise ValidationError({"marker": "Можно сохранять только информационные метки (type=info)."})
+        if self.tour_id and self.marker_id:
+            if not TourMarker.objects.filter(tour_id=self.tour_id, marker_id=self.marker_id).exists():
+                raise ValidationError({"marker": "Метка должна быть привязана к выбранному туру."})
+
+    def __str__(self):
+        return f"{self.user} — {self.tour} — {self.marker}"

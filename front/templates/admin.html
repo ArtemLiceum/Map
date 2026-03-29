@@ -89,6 +89,51 @@
   </div>
 </div>
 
+<!-- Модалка для метки панорамы -->
+<div id="markerModal" class="modal">
+  <div class="card marker-card">
+    <h3 id="markerModalTitle">Новая метка</h3>
+
+    <label>Тип метки
+      <select id="markerType">
+        <option value="transition">Переход</option>
+        <option value="info">Информационная</option>
+      </select>
+    </label>
+
+    <div id="markerTransitionFields">
+      <label>Подпись перехода
+        <input id="markerLabel" type="text" placeholder="Например: В коридор" />
+      </label>
+      <label>Поиск точки
+        <input id="targetSearch" type="text" placeholder="Начните вводить название точки" />
+      </label>
+      <label>Целевая точка
+        <select id="targetPointSelect"></select>
+      </label>
+    </div>
+
+    <div id="markerInfoFields" class="hidden">
+      <label>Заголовок информационной метки
+        <input id="infoLabel" type="text" placeholder="Например: Огнетушитель" />
+      </label>
+      <label>Текст
+        <textarea id="infoText" rows="4" placeholder="Описание или инструкция"></textarea>
+      </label>
+      <label>Туры
+        <select id="infoTours" multiple size="6"></select>
+      </label>
+      <div id="infoToursHint" class="small"></div>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="markerDeleteBtn" class="btn danger" type="button">Удалить</button>
+      <button id="markerSaveBtn" class="btn" type="button">Создать</button>
+      <button id="markerCancelBtn" class="btn gray" type="button">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <!-- Модалка для кропа -->
 <div id="cropModal" class="modal">
   <div class="card wide">

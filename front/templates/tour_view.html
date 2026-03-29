@@ -34,6 +34,15 @@
             Тур:
             <select id="tvTourSelect"></select>
         </label>
+        <div id="tvTourProgress" class="tv-tour-progress hidden" aria-live="polite">
+            <div id="tvTourProgressTitle" class="tv-tour-progress-title"></div>
+            <div class="tv-tour-progress-row">
+                <span id="tvTourProgressText">Прогресс: 0%</span>
+            </div>
+            <div class="tv-tour-progress-bar">
+                <div id="tvTourProgressBarFill" class="tv-tour-progress-bar-fill"></div>
+            </div>
+        </div>
     </div>
     {% endif %}
 

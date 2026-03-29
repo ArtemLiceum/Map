@@ -257,6 +257,44 @@
   padding: 4px 6px;
 }
 
+.tv-tour-progress {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  min-width: 230px;
+}
+
+.tv-tour-progress.hidden {
+  display: none;
+}
+
+.tv-tour-progress-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 6px;
+}
+
+.tv-tour-progress-row {
+  font-size: 13px;
+  color: #f8fafc;
+}
+
+.tv-tour-progress-bar {
+  margin-top: 6px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.tv-tour-progress-bar-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #22d3ee, #16a34a);
+  transition: width 0.2s ease;
+}
+
 @media (max-width: 600px) {
   .tv-minimap {
     width: 180px;

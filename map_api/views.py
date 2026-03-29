@@ -1,11 +1,11 @@
 from django.contrib.auth.models import User, Group, Permission
-from django.db.models import Q
+from django.db.models import Q, Count, Max
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS, IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Prefetch
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour
+from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourInfoMarkerView
 from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
 from .serializers import (
@@ -211,7 +211,48 @@ class TourViewSet(viewsets.ModelViewSet):
             qs = qs.filter(plan_id=plan_id)
         if not self.request.user.is_staff:
             qs = qs.filter(is_active=True)
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated:
+            qs = qs.annotate(
+                progress_total=Count(
+                    'tour_markers',
+                    filter=Q(tour_markers__marker__type=PanoramaMarker.MarkerType.INFO),
+                    distinct=True,
+                ),
+                progress_viewed=Count(
+                    'info_marker_views',
+                    filter=Q(info_marker_views__user=user),
+                    distinct=True,
+                ),
+            )
         return qs.order_by('plan_id', 'title')
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='mark-viewed')
+    def mark_viewed(self, request, pk=None):
+        tour = self.get_object()
+        marker_id = request.data.get('marker_id')
+        try:
+            marker_id = int(marker_id)
+        except (TypeError, ValueError):
+            return Response({'detail': 'marker_id должен быть целым числом.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        marker = PanoramaMarker.objects.filter(id=marker_id).first()
+        if not marker:
+            return Response({'detail': 'Маркер не найден.'}, status=status.HTTP_404_NOT_FOUND)
+        if marker.type != PanoramaMarker.MarkerType.INFO:
+            return Response({'detail': 'Можно отметить только информационную метку.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not tour.tour_markers.filter(marker_id=marker.id).exists():
+            return Response({'detail': 'Эта метка не принадлежит выбранному туру.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        TourInfoMarkerView.objects.get_or_create(
+            user=request.user,
+            tour=tour,
+            marker=marker,
+        )
+        viewed = TourInfoMarkerView.objects.filter(user=request.user, tour=tour).count()
+        total = tour.markers.filter(type=PanoramaMarker.MarkerType.INFO).count()
+        percent = int(round((viewed / total) * 100)) if total else 0
+        return Response({'viewed': viewed, 'total': total, 'percent': percent}, status=status.HTTP_200_OK)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -246,6 +287,45 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(serializer.validated_data['new_password'])
         user.save()
         return Response({'detail': 'Пароль обновлён.'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='tour-progress', permission_classes=[IsSuperUser])
+    def tour_progress(self, request, pk=None):
+        user_obj = self.get_object()
+        plan_id = request.query_params.get('plan')
+        tours_qs = Tour.objects.select_related('plan')
+        if plan_id:
+            tours_qs = tours_qs.filter(plan_id=plan_id)
+        tours_qs = tours_qs.annotate(
+            progress_total=Count(
+                'tour_markers',
+                filter=Q(tour_markers__marker__type=PanoramaMarker.MarkerType.INFO),
+                distinct=True,
+            ),
+            progress_viewed=Count(
+                'info_marker_views',
+                filter=Q(info_marker_views__user=user_obj),
+                distinct=True,
+            ),
+            last_viewed_at=Max(
+                'info_marker_views__viewed_at',
+                filter=Q(info_marker_views__user=user_obj),
+            ),
+        ).order_by('plan__title', 'title')
+
+        data = [
+            {
+                'plan': t.plan_id,
+                'plan_title': t.plan.title,
+                'tour': t.id,
+                'tour_title': t.title,
+                'viewed': int(t.progress_viewed or 0),
+                'total': int(t.progress_total or 0),
+                'percent': int(round((t.progress_viewed / t.progress_total) * 100)) if t.progress_total else 0,
+                'last_viewed_at': t.last_viewed_at,
+            }
+            for t in tours_qs
+        ]
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class GroupViewSet(viewsets.ReadOnlyModelViewSet):

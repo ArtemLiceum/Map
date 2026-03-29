@@ -3,6 +3,57 @@ body { font-family: Inter, system-ui, Arial; margin: 16px; color: #111; }
 h1 { font-size: 20px; }
 .row { display: flex; gap: 16px; }
 .panel { flex: 1; background: #fafafa; border: 1px solid #eee; padding: 12px; border-radius: 8px; }
+
+/* Form spacing for admin editor and user edit pages */
+.panel h3,
+.panel h4 {
+  margin: 0 0 10px;
+}
+
+.panel hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.panel label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.panel label + input:not([type="checkbox"]):not([type="radio"]),
+.panel label + select,
+.panel label + textarea,
+.panel label > input:not([type="checkbox"]):not([type="radio"]),
+.panel label > select,
+.panel label > textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  color: #111827;
+  background: #fff;
+}
+
+.panel label + textarea,
+.panel label > textarea {
+  resize: vertical;
+}
+
+.panel input[type="checkbox"],
+.panel input[type="radio"] {
+  margin-right: 8px;
+}
+
+.panel select[multiple] {
+  min-height: 120px;
+}
+
 #planWrap { position: relative; display: inline-block; border: 1px solid #ddd; }
 #plan { max-width: 100%; height: auto; display: block; }
 
@@ -38,9 +89,11 @@ h1 { font-size: 20px; }
   cursor: pointer;
 }
 .btn.gray { background: #6b7280; }
+.btn.danger { background: #dc2626; }
 
 .small { font-size: 13px; color: #666; }
 .hint { font-size: 13px; color: #666; margin-top: 8px; }
+.hidden { display: none !important; }
 
 .modal {
   position: fixed;
@@ -49,9 +102,29 @@ h1 { font-size: 20px; }
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,.45);
+  z-index: 1000;
 }
 .modal .card { background: #fff; padding: 18px; border-radius: 10px; min-width: 320px; max-width: 90%; }
 .modal .card.wide { max-width: 1100px; }
+.modal .card label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #374151;
+}
+.modal .card input[type="text"],
+.modal .card textarea,
+.modal .card select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  color: #111827;
+}
+.modal .card textarea { resize: vertical; }
 .modal-buttons { margin-top: 12px; text-align: right; }
 .panorama-view { position: relative; border: 1px solid #ddd; overflow: hidden; }
 .panorama-view img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
@@ -60,3 +133,21 @@ h1 { font-size: 20px; }
 .crop-canvas-wrap { border: 1px solid #ddd; max-height: 70vh; overflow: hidden; }
 .crop-canvas-wrap img { max-width: 100%; display: block; }
 .crop-preview { width: 180px; height: 120px; border: 1px solid #ddd; overflow: hidden; background: #f9fafb; }
+
+.marker-card {
+  width: min(520px, 92vw);
+}
+
+/* Ensure stacked modals behave predictably */
+#panoramaModal { z-index: 1100; }
+#markerModal { z-index: 1200; }
+#cropModal { z-index: 1300; }
+
+#markerTransitionFields,
+#markerInfoFields {
+  margin-top: 8px;
+}
+
+#infoTours {
+  min-height: 120px;
+}

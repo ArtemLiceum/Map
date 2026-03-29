@@ -38,6 +38,19 @@
     border-radius: 8px;
     margin-bottom: 12px;
 }
+.progress-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.progress-table th,
+.progress-table td {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px;
+    text-align: left;
+}
+.progress-table th {
+    background: #f8fafc;
+}
 </style>
 {% endblock %}
 
@@ -94,6 +107,25 @@
         <div class="modal-buttons">
             <button id="saveUserBtn" class="btn">Сохранить</button>
             <a href="{% url 'users_list' %}" class="btn gray">Назад к списку</a>
+        </div>
+    </div>
+
+    <div class="panel stack" style="margin-top:16px;">
+        <h4 class="section-title">Прогресс туров</h4>
+        <div id="tourProgressState" class="small">Загрузка...</div>
+        <div class="table-responsive">
+            <table class="progress-table" id="tourProgressTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>План</th>
+                        <th>Тур</th>
+                        <th>Прогресс</th>
+                        <th>Процент</th>
+                        <th>Последний просмотр</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 

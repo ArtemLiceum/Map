@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour
+from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourInfoMarkerView
 
 
 class PanoramaMarkerSerializer(serializers.ModelSerializer):
@@ -198,13 +198,47 @@ class UserAdminSerializer(serializers.ModelSerializer):
 
 class TourSerializer(serializers.ModelSerializer):
     markers_count = serializers.SerializerMethodField()
+    progress_viewed = serializers.SerializerMethodField()
+    progress_total = serializers.SerializerMethodField()
+    progress_percent = serializers.SerializerMethodField()
 
     class Meta:
         model = Tour
-        fields = ['id', 'plan', 'title', 'is_active', 'created_at', 'markers_count']
+        fields = [
+            'id',
+            'plan',
+            'title',
+            'is_active',
+            'created_at',
+            'markers_count',
+            'progress_viewed',
+            'progress_total',
+            'progress_percent',
+        ]
 
     def get_markers_count(self, obj):
         return obj.markers.count()
+
+    def get_progress_total(self, obj):
+        if hasattr(obj, 'progress_total'):
+            return int(obj.progress_total or 0)
+        return obj.markers.filter(type=PanoramaMarker.MarkerType.INFO).count()
+
+    def get_progress_viewed(self, obj):
+        if hasattr(obj, 'progress_viewed'):
+            return int(obj.progress_viewed or 0)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return 0
+        return TourInfoMarkerView.objects.filter(user=user, tour=obj).count()
+
+    def get_progress_percent(self, obj):
+        total = self.get_progress_total(obj)
+        if total <= 0:
+            return 0
+        viewed = self.get_progress_viewed(obj)
+        return int(round((viewed / total) * 100))
 
 
 class UserSetPasswordSerializer(serializers.Serializer):
