@@ -62,6 +62,27 @@ let lastDragAt = 0;
 let markerDraft = null;
 
 // --- API helpers ---
+
+function adminEscapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Сравнение id сущностей из API/localStorage (число vs строка). */
+function sameEntityId(a, b) {
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb;
+  return String(a) === String(b);
+}
+
+function clickEventTargetElement(ev) {
+  const t = ev.target;
+  return t instanceof Element ? t : t.parentElement;
+}
+
 function getCookie(name) {
   const value = `; ${document.cookie || ''}`;
   const parts = value.split(`; ${name}=`);
@@ -216,19 +237,26 @@ async function deleteTourRequest(id) {
   return true;
 }
 
-window.deleteTour = async function (tourId) {
-  const tour = state.tours.find(t => t.id === tourId);
-  if (!tour) return;
-  if (!confirm(`Удалить тур «${t.title}»?`)) return;
+async function deleteTourAction(tourId) {
+  const nid = Number(tourId);
+  if (!Number.isFinite(nid)) {
+    alert('Некорректный идентификатор тура.');
+    return;
+  }
+  const tour = state.tours.find(t => sameEntityId(t.id, tourId));
+  const titleLabel = tour?.title ?? `ID ${nid}`;
+  if (!confirm(`Удалить тур «${titleLabel}»?`)) return;
   try {
-    await deleteTourRequest(tourId);
-    state.tours = state.tours.filter(t => t.id !== tourId);
+    await deleteTourRequest(nid);
+    state.tours = state.tours.filter(t => !sameEntityId(t.id, tourId));
     saveState();
     renderAll();
   } catch (err) {
     alert(err.message || 'Не удалось удалить тур');
   }
-};
+}
+
+window.deleteTour = deleteTourAction;
 
 // --- LocalStorage ---
 function loadState() {
@@ -551,11 +579,13 @@ function renderAll() {
   });
 
   pointsList.innerHTML = state.points.map(p => `
-    <div>
-      <b>${p.name}</b> — ${p.x.toFixed(2)}%, ${p.y.toFixed(2)}%
-      <button onclick="editPoint(${p.id})">✏️</button>
-      <button onclick="deletePoint(${p.id})">🗑️</button>
-      ${p.panorama ? `<button onclick="openPanoramaBtn(${p.id})">🖼️</button>` : ''}
+    <div class="admin-list-row">
+      <div class="admin-list-row__meta"><b>${adminEscapeHtml(p.name)}</b> — ${p.x.toFixed(2)}%, ${p.y.toFixed(2)}%</div>
+      <div class="admin-list-row__actions">
+        <button type="button" data-point-action="edit" data-point-id="${p.id}">✏️</button>
+        <button type="button" data-point-action="delete" data-point-id="${p.id}">🗑️</button>
+        ${p.panorama ? `<button type="button" data-point-action="panorama" data-point-id="${p.id}">🖼️</button>` : ''}
+      </div>
     </div>`).join('') || '<div class="small">Точек пока нет</div>';
 
   renderTours();
@@ -572,18 +602,23 @@ function renderTours() {
     return;
   }
   toursList.innerHTML = state.tours.map(t => `
-    <div style="margin-bottom:6px;">
-      <b>${t.title}</b> ${t.is_active ? '🟢' : '⚪️'}
-      <button onclick="renameTour(${t.id})">✏️</button>
-      <button onclick="toggleTour(${t.id})">${t.is_active ? 'Деактивировать' : 'Активировать'}</button>
-      <button onclick="deleteTour(${t.id})" type="button" title="Удалить тур">🗑️</button>
+    <div class="admin-list-row">
+      <div class="admin-list-row__meta"><b>${adminEscapeHtml(t.title)}</b> ${t.is_active ? '🟢' : '⚪️'}</div>
+      <div class="admin-list-row__actions">
+        <button type="button" data-tour-action="rename" data-tour-id="${t.id}">✏️</button>
+        <button type="button" data-tour-action="toggle" data-tour-id="${t.id}">${t.is_active ? 'Деактивировать' : 'Активировать'}</button>
+        <button type="button" data-tour-action="delete" data-tour-id="${t.id}" title="Удалить тур">🗑️</button>
+      </div>
     </div>
   `).join('');
 }
 
 async function renameTour(tourId) {
-  const tour = state.tours.find(t => t.id === tourId);
-  if (!tour) return;
+  const tour = state.tours.find(t => sameEntityId(t.id, tourId));
+  if (!tour) {
+    alert('Тур не найден в списке. Обновите страницу.');
+    return;
+  }
   const newTitle = (prompt('Новое название тура', tour.title) || '').trim();
   if (!newTitle || newTitle === tour.title) return;
   try {
@@ -596,8 +631,11 @@ async function renameTour(tourId) {
 }
 
 async function toggleTour(tourId) {
-  const tour = state.tours.find(t => t.id === tourId);
-  if (!tour) return;
+  const tour = state.tours.find(t => sameEntityId(t.id, tourId));
+  if (!tour) {
+    alert('Тур не найден в списке. Обновите страницу.');
+    return;
+  }
   try {
     const updated = await updateTour(tourId, { is_active: !tour.is_active });
     Object.assign(tour, updated);
@@ -932,7 +970,7 @@ async function openPanorama(point){
       const option = document.createElement('option');
       option.value = String(t.id);
       option.textContent = `${t.title}${t.is_active ? '' : ' (неактивен)'}`;
-      option.selected = selectedSet.has(t.id);
+      option.selected = selectedSet.has(Number(t.id));
       infoTours.appendChild(option);
     });
   }
@@ -1100,6 +1138,35 @@ document.querySelectorAll('.modal').forEach(m => m.addEventListener('pointerdown
     m.style.display = 'none';
   }
 }));
+
+
+function setupSidebarListDelegation() {
+  if (!pointsList || !toursList) return;
+
+  pointsList.addEventListener('click', (e) => {
+    const btn = clickEventTargetElement(e).closest('button[data-point-action]');
+    if (!btn || !pointsList.contains(btn)) return;
+    const id = parseInt(btn.dataset.pointId, 10);
+    if (!Number.isFinite(id)) return;
+    const action = btn.dataset.pointAction;
+    if (action === 'edit') window.editPoint(id);
+    else if (action === 'delete') window.deletePoint(id);
+    else if (action === 'panorama') window.openPanoramaBtn(id);
+  });
+
+  toursList.addEventListener('click', (e) => {
+    const btn = clickEventTargetElement(e).closest('button[data-tour-action]');
+    if (!btn || !toursList.contains(btn)) return;
+    const id = parseInt(btn.dataset.tourId, 10);
+    if (!Number.isFinite(id)) return;
+    const action = btn.dataset.tourAction;
+    if (action === 'rename') void renameTour(id);
+    else if (action === 'toggle') void toggleTour(id);
+    else if (action === 'delete') void deleteTourAction(id);
+  });
+}
+
+setupSidebarListDelegation();
 
 (async function init() {
   const handled = await initFromQuery();

@@ -95,6 +95,35 @@ h1 { font-size: 20px; }
 .hint { font-size: 13px; color: #666; margin-top: 8px; }
 .hidden { display: none !important; }
 
+/* Список точек / туры: текст слева, кнопки справа */
+.admin-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.admin-list-row:last-child {
+  margin-bottom: 0;
+}
+.admin-list-row__meta {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+.admin-list-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.admin-section-actions {
+  text-align: right;
+  margin-top: 8px;
+}
+
 .modal {
   position: fixed;
   inset: 0;
