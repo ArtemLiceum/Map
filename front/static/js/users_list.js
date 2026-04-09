@@ -13,6 +13,7 @@ function apiFetch(url, options = {}) {
   if (!csrfSafe) {
     const token = getCookie('csrftoken');
     if (token) headers.set('X-CSRFToken', token);
+    headers.set('Content-Type', 'application/json');
   }
 
   return fetch(url, {
@@ -24,6 +25,7 @@ function apiFetch(url, options = {}) {
 
 const API = {
   users: '/api/users/',
+  registrationCode: '/api/registration-code/',
 };
 
 const searchInput = document.getElementById('searchInput');
@@ -31,6 +33,30 @@ const searchBtn = document.getElementById('searchBtn');
 const resetBtn = document.getElementById('resetBtn');
 const usersTableBody = document.querySelector('#usersTable tbody');
 const stateMessage = document.getElementById('stateMessage');
+const registrationCodeWordEl = document.getElementById('registrationCodeWord');
+const generateRegCodeBtn = document.getElementById('generateRegCodeBtn');
+const registrationCodeErrorEl = document.getElementById('registrationCodeError');
+
+function showRegCodeError(message) {
+  if (!registrationCodeErrorEl) return;
+  registrationCodeErrorEl.textContent = message;
+  registrationCodeErrorEl.style.display = message ? 'block' : 'none';
+}
+
+function formatApiErrors(errorBody) {
+  if (typeof errorBody === 'string') return new Error(errorBody);
+  if (Array.isArray(errorBody)) return new Error(errorBody.join(', '));
+  const messages = [];
+  for (const key in errorBody) {
+    const val = errorBody[key];
+    if (Array.isArray(val)) {
+      messages.push(`${key}: ${val.join(', ')}`);
+    } else if (typeof val === 'string') {
+      messages.push(`${key}: ${val}`);
+    }
+  }
+  return new Error(messages.join(' | ') || 'Ошибка');
+}
 
 function setStateMessage(text, show = true) {
   stateMessage.textContent = text;
@@ -76,6 +102,38 @@ function renderUsers(users) {
   });
 }
 
+async function loadRegistrationCode() {
+  const res = await apiFetch(API.registrationCode);
+  if (!res.ok) throw new Error('Не удалось загрузить кодовое слово');
+  const data = await res.json();
+  if (registrationCodeWordEl) {
+    registrationCodeWordEl.value = data.word || '';
+  }
+  showRegCodeError('');
+}
+
+async function generateRegistrationCode() {
+  if (!generateRegCodeBtn) return;
+  generateRegCodeBtn.disabled = true;
+  showRegCodeError('');
+  try {
+    const res = await apiFetch(API.registrationCode, { method: 'POST', body: '{}' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw formatApiErrors(error);
+    }
+    const data = await res.json();
+    if (registrationCodeWordEl) {
+      registrationCodeWordEl.value = data.word || '';
+    }
+    alert('Кодовое слово обновлено');
+  } catch (err) {
+    showRegCodeError(err.message || 'Не удалось сгенерировать слово');
+  } finally {
+    generateRegCodeBtn.disabled = false;
+  }
+}
+
 searchBtn.addEventListener('click', () => {
   loadUsers(searchInput.value.trim());
 });
@@ -91,5 +149,21 @@ searchInput.addEventListener('keyup', (e) => {
   }
 });
 
-// Initial load
-loadUsers();
+if (generateRegCodeBtn) {
+  generateRegCodeBtn.addEventListener('click', generateRegistrationCode);
+}
+
+// Initial load: список и кодовое слово независимо (ошибка одного не блокирует другое)
+(async () => {
+  try {
+    await loadUsers();
+  } catch (err) {
+    console.error(err);
+  }
+  try {
+    await loadRegistrationCode();
+  } catch (err) {
+    console.error(err);
+    showRegCodeError(err.message || 'Не удалось загрузить кодовое слово');
+  }
+})();

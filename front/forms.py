@@ -3,6 +3,8 @@ import re
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 
+from map_api.models import RegistrationCodeWord
+
 
 User = get_user_model()
 
@@ -23,12 +25,31 @@ class EmailRegistrationForm(forms.Form):
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
     )
+    code_word = forms.CharField(
+        label="Кодовое слово",
+        required=True,
+        strip=True,
+        widget=forms.TextInput(attrs={"autocomplete": "off"}),
+    )
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError("Пользователь с таким email уже существует.")
         return email
+
+    def clean_code_word(self):
+        raw = self.cleaned_data.get("code_word", "").strip()
+        if not raw:
+            raise forms.ValidationError("Введите кодовое слово.")
+        obj = RegistrationCodeWord.get_solo()
+        if obj is None:
+            raise forms.ValidationError(
+                "Регистрация временно недоступна: кодовое слово не настроено. Обратитесь к администратору."
+            )
+        if raw != obj.word:
+            raise forms.ValidationError("Неверное кодовое слово.")
+        return raw
 
     def clean(self):
         cleaned = super().clean()

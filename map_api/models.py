@@ -230,3 +230,24 @@ class TourInfoMarkerView(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.tour} — {self.marker}"
+
+
+class RegistrationCodeWord(models.Model):
+    """Единственное кодовое слово для регистрации (синглтон с pk=1)."""
+    SOLO_PK = 1
+
+    word = models.CharField(max_length=128, verbose_name="Кодовое слово")
+
+    class Meta:
+        verbose_name = "Кодовое слово регистрации"
+        verbose_name_plural = "Кодовое слово регистрации"
+
+    def __str__(self):
+        return "Кодовое слово регистрации"
+
+    @classmethod
+    def get_solo(cls):
+        try:
+            return cls.objects.get(pk=cls.SOLO_PK)
+        except cls.DoesNotExist:
+            return None

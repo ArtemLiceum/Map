@@ -47,12 +47,43 @@
     padding: 24px;
     color: #64748b;
 }
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.readonly {
+    background: #f8fafc;
+}
+.error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+.section-title {
+    margin-top: 0;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
     <h1 class="page-hero-title">Пользователи</h1>
+
+    <div class="panel stack" style="margin-bottom:16px;">
+        <h4 class="section-title">Кодовое слово для регистрации</h4>
+        <p class="small" style="margin:0;">Его вводят при регистрации нового пользователя на сайте.</p>
+        <div id="registrationCodeError" class="error-box" style="display:none;"></div>
+        <label>Текущее слово
+            <input id="registrationCodeWord" type="text" class="readonly" readonly placeholder="Не сгенерировано">
+        </label>
+        <div class="modal-buttons">
+            <button id="generateRegCodeBtn" type="button" class="btn">Сгенерировать</button>
+        </div>
+    </div>
 
     <div class="panel">
         <div class="toolbar">

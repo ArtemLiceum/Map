@@ -7,6 +7,7 @@ from .views import (
     EvacPlanViewSet, MapPointViewSet,
     PanoramaViewSet, PanoramaMarkerViewSet, TourViewSet,
     UserViewSet, GroupViewSet, PermissionViewSet,
+    RegistrationCodeWordView,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register(r'permissions', PermissionViewSet)
 urlpatterns = [
     path('token/', EmailTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('registration-code/', RegistrationCodeWordView.as_view(), name='registration_code'),
 ]
 
 urlpatterns += router.urls

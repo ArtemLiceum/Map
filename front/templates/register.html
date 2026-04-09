@@ -146,6 +146,20 @@
             </div>
 
             <div class="form-floating">
+                <input type="text" class="form-control {% if form.code_word.errors %}is-invalid{% endif %}"
+                       id="code_word" name="code_word"
+                       placeholder="Кодовое слово"
+                       value="{{ form.code_word.value|default:'' }}"
+                       required autocomplete="off">
+                <label for="code_word">Кодовое слово</label>
+                {% if form.code_word.errors %}
+                    <div class="invalid-feedback">
+                        {% for error in form.code_word.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-floating">
                 <input type="password" class="form-control {% if form.password1.errors %}is-invalid{% endif %}"
                        id="password1" name="password1"
                        placeholder="Пароль" required>

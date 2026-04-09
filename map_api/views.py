@@ -1,11 +1,23 @@
+import secrets
+
 from django.contrib.auth.models import User, Group, Permission
 from django.db.models import Q, Count, Max
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, AllowAny, SAFE_METHODS, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.db.models import Prefetch
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourInfoMarkerView
+from .models import (
+    EvacPlan,
+    MapPoint,
+    Panorama,
+    PanoramaMarker,
+    Tour,
+    TourInfoMarkerView,
+    RegistrationCodeWord,
+)
+from .admin_log import ADDITION, CHANGE, DELETION, log_drf_action
 from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
 from .serializers import (
@@ -54,6 +66,18 @@ class AdminOnlyViewSetMixin:
                 pass
         return super().get_serializer(*args, **kwargs)
 
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        log_drf_action(self.request.user, serializer.instance, ADDITION)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        log_drf_action(self.request.user, serializer.instance, CHANGE)
+
+    def perform_destroy(self, instance):
+        log_drf_action(self.request.user, instance, DELETION)
+        super().perform_destroy(instance)
+
     def _get_cropped_file(self, request, *, field_name='image', instance=None):
         """
         Returns cropped file if crop data provided, otherwise the original uploaded file (if any).
@@ -96,6 +120,7 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         cropped = self._get_cropped_file(self.request)
         serializer.save(image=cropped or self.request.FILES.get('image'))
+        log_drf_action(self.request.user, serializer.instance, ADDITION)
 
     def perform_update(self, serializer):
         instance: EvacPlan = serializer.instance
@@ -106,6 +131,7 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
             serializer.save(image=cropped)
         else:
             serializer.save()
+        log_drf_action(self.request.user, serializer.instance, CHANGE)
 
     def _marker_queryset_for_request(self):
         user = getattr(self.request, 'user', None)
@@ -162,6 +188,7 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
             # Check if panorama already exists for this point — replace it
             existing = Panorama.objects.filter(point_id=point_id).first()
             if existing:
+                log_drf_action(self.request.user, existing, DELETION)
                 existing.image.delete(save=False)
                 existing.delete()
         return super().create(request, *args, **kwargs)
@@ -169,6 +196,7 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         cropped = self._get_cropped_file(self.request)
         serializer.save(image=cropped or self.request.FILES.get('image'))
+        log_drf_action(self.request.user, serializer.instance, ADDITION)
 
     def perform_update(self, serializer):
         instance: Panorama = serializer.instance
@@ -179,6 +207,7 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
             serializer.save(image=cropped)
         else:
             serializer.save()
+        log_drf_action(self.request.user, serializer.instance, CHANGE)
 
 
 class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
@@ -226,6 +255,18 @@ class TourViewSet(viewsets.ModelViewSet):
                 ),
             )
         return qs.order_by('plan_id', 'title')
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        log_drf_action(self.request.user, serializer.instance, ADDITION)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        log_drf_action(self.request.user, serializer.instance, CHANGE)
+
+    def perform_destroy(self, instance):
+        log_drf_action(self.request.user, instance, DELETION)
+        super().perform_destroy(instance)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='mark-viewed')
     def mark_viewed(self, request, pk=None):
@@ -279,6 +320,18 @@ class UserViewSet(viewsets.ModelViewSet):
             )
         return qs
 
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        log_drf_action(self.request.user, serializer.instance, ADDITION)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        log_drf_action(self.request.user, serializer.instance, CHANGE)
+
+    def perform_destroy(self, instance):
+        log_drf_action(self.request.user, instance, DELETION)
+        super().perform_destroy(instance)
+
     @action(detail=True, methods=['post'], url_path='set-password', permission_classes=[IsSuperUser])
     def set_password(self, request, pk=None):
         user = self.get_object()
@@ -286,6 +339,12 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user.set_password(serializer.validated_data['new_password'])
         user.save()
+        log_drf_action(
+            request.user,
+            user,
+            CHANGE,
+            [{"changed": {"fields": ["password"]}}],
+        )
         return Response({'detail': 'Пароль обновлён.'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='tour-progress', permission_classes=[IsSuperUser])
@@ -326,6 +385,28 @@ class UserViewSet(viewsets.ModelViewSet):
             for t in tours_qs
         ]
         return Response(data, status=status.HTTP_200_OK)
+
+
+class RegistrationCodeWordView(APIView):
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        obj = RegistrationCodeWord.get_solo()
+        return Response({'word': obj.word if obj else ''})
+
+    def post(self, request):
+        word = secrets.token_urlsafe(24)
+        obj, _ = RegistrationCodeWord.objects.update_or_create(
+            pk=RegistrationCodeWord.SOLO_PK,
+            defaults={'word': word},
+        )
+        log_drf_action(
+            request.user,
+            obj,
+            CHANGE,
+            [{"changed": {"fields": ["word"]}}],
+        )
+        return Response({'word': obj.word})
 
 
 class GroupViewSet(viewsets.ReadOnlyModelViewSet):
