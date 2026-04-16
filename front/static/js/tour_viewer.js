@@ -580,5 +580,14 @@
     });
   }
 
-  init();
+  if (typeof window !== 'undefined' && window.__TOUR_VIEWER_TESTS__) {
+    window.__tourViewerTest = {
+      state,
+      loadScene,
+    };
+  }
+
+  if (!(typeof window !== 'undefined' && window.__TOUR_VIEWER_DISABLE_AUTO_INIT__)) {
+    init();
+  }
 })();
