@@ -10,15 +10,18 @@
     width: 100%;
     border-collapse: collapse;
 }
-.users-table th {
-    background: #f3f4f6;
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #e5e7eb;
-}
+.users-table th,
 .users-table td {
     padding: 10px;
     border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+}
+.users-table th {
+    background: #f3f4f6;
+    text-align: center;
+}
+.users-table td {
+    text-align: left;
 }
 .users-table tr:hover {
     background: #f8fafc;
@@ -102,8 +105,8 @@
                         <th>Email</th>
                         <th>ФИО</th>
                         <th>Активен</th>
-                        <th>Staff</th>
-                        <th>Superuser</th>
+                        <th>Администратор туров</th>
+                        <th>Администратор пользователей</th>
                     </tr>
                 </thead>
                 <tbody></tbody>

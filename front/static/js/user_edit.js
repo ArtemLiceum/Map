@@ -25,7 +25,6 @@ function apiFetch(url, options = {}) {
 
 const API = {
   users: '/api/users/',
-  groups: '/api/groups/',
   permissions: '/api/permissions/',
 };
 
@@ -38,7 +37,6 @@ const isStaffEl = document.getElementById('isStaff');
 const isSuperuserEl = document.getElementById('isSuperuser');
 const dateJoinedEl = document.getElementById('dateJoined');
 const lastLoginEl = document.getElementById('lastLogin');
-const groupsSelect = document.getElementById('groupsSelect');
 const permissionsSelect = document.getElementById('permissionsSelect');
 const permSearchInput = document.getElementById('permSearch');
 const saveUserBtn = document.getElementById('saveUserBtn');
@@ -78,7 +76,6 @@ function populateUser(user) {
   dateJoinedEl.value = formatDate(user.date_joined);
   lastLoginEl.value = formatDate(user.last_login);
 
-  setSelected(groupsSelect, user.groups || []);
   setSelected(permissionsSelect, user.user_permissions || []);
 }
 
@@ -95,12 +92,6 @@ async function loadUser() {
   return res.json();
 }
 
-async function loadGroups() {
-  const res = await apiFetch(API.groups);
-  if (!res.ok) throw new Error('Не удалось загрузить группы');
-  return res.json();
-}
-
 async function loadPermissions(search = '') {
   const url = search ? `${API.permissions}?search=${encodeURIComponent(search)}` : API.permissions;
   const res = await apiFetch(url);
@@ -112,16 +103,6 @@ async function loadTourProgress() {
   const res = await apiFetch(`${API.users}${window.USER_ID}/tour-progress/`);
   if (!res.ok) throw new Error('Не удалось загрузить прогресс туров');
   return res.json();
-}
-
-function renderGroups(groups) {
-  groupsSelect.innerHTML = '';
-  groups.forEach((g) => {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    groupsSelect.appendChild(opt);
-  });
 }
 
 function renderPermissions(perms) {
@@ -137,14 +118,12 @@ function renderPermissions(perms) {
 
 async function bootstrap() {
   try {
-    const [user, groups, perms, tourProgress] = await Promise.all([
+    const [user, perms, tourProgress] = await Promise.all([
       loadUser(),
-      loadGroups(),
       loadPermissions(),
       loadTourProgress(),
     ]);
     permissionsCache = perms;
-    renderGroups(groups);
     renderPermissions(permissionsCache);
     populateUser(user);
     renderTourProgress(tourProgress);
@@ -194,7 +173,6 @@ async function saveUser() {
       is_active: isActiveEl.checked,
       is_staff: isStaffEl.checked,
       is_superuser: isSuperuserEl.checked,
-      groups: collectSelected(groupsSelect),
       user_permissions: collectSelected(permissionsSelect),
     };
 

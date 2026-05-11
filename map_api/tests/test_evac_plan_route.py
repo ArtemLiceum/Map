@@ -9,7 +9,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from map_api.models import EvacPlan, MapPoint, Panorama, PanoramaMarker
-from map_api.route_graph import bfs_shortest_route, build_adjacency, transition_edges_for_plan
+from map_api.route_graph import (
+    bfs_shortest_route,
+    bfs_shortest_route_to_any_end,
+    build_adjacency,
+    transition_edges_for_plan,
+)
 
 User = get_user_model()
 
@@ -23,6 +28,13 @@ class EvacPlanRouteGraphTests(APITestCase):
         self.assertEqual(path, [1, 2])
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0]["marker_id"], 5)
+
+    def test_bfs_shortest_to_any_end(self):
+        adj = build_adjacency([(1, 2, 1), (2, 3, 2)])
+        path, steps, end = bfs_shortest_route_to_any_end(adj, 1, {3, 99})
+        self.assertEqual(end, 3)
+        self.assertEqual(path, [1, 2, 3])
+        self.assertEqual(len(steps), 2)
 
 
 @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")

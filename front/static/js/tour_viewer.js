@@ -24,6 +24,7 @@
   const tourProgressTitle = document.getElementById('tvTourProgressTitle');
   const tourProgressText = document.getElementById('tvTourProgressText');
   const tourProgressBarFill = document.getElementById('tvTourProgressBarFill');
+  const tvTourHintBtn = document.getElementById('tvTourHintBtn');
   const minimapRouteSvg = document.getElementById('tvMinimapRoute');
   const tvRouteStart = document.getElementById('tvRouteStart');
   const tvRouteEnd = document.getElementById('tvRouteEnd');
@@ -326,6 +327,29 @@
     }, 2200);
   }
 
+  function applyRouteApiResult(data, endPointIdOverride) {
+    if (!data || !data.found) return false;
+    const endId =
+      endPointIdOverride != null && Number.isFinite(Number(endPointIdOverride))
+        ? Number(endPointIdOverride)
+        : data.end_point_id != null
+          ? Number(data.end_point_id)
+          : Number(data.path[data.path.length - 1]);
+    state.route = {
+      endPointId: endId,
+      path: data.path,
+      steps: data.steps || [],
+      deviation: 'none'
+    };
+    saveRouteToStorage();
+    hideDeviationBanner();
+    updateRoutePolyline();
+    highlightMinimap(state.activePointId);
+    applyRouteNavHighlights();
+    syncRouteStartSelectFromActive();
+    return true;
+  }
+
   async function fetchAndApplyRoute(startId, endId) {
     setRouteStatus('');
     hideRecalcHint();
@@ -349,20 +373,44 @@
       setRoutePanelVisible(true);
       return false;
     }
-    state.route = {
-      endPointId: endId,
-      path: data.path,
-      steps: data.steps || [],
-      deviation: 'none'
-    };
-    saveRouteToStorage();
-    hideDeviationBanner();
-    updateRoutePolyline();
-    highlightMinimap(state.activePointId);
-    applyRouteNavHighlights();
+    applyRouteApiResult(data, endId);
     setRouteStatus('');
     showRouteToast('Маршрут построен.');
     return true;
+  }
+
+  async function fetchTourRouteHint() {
+    if (!IS_AUTH || !state.selectedTourId || state.activePointId == null) return;
+    try {
+      if (tvTourHintBtn) tvTourHintBtn.disabled = true;
+      const url = `/api/tours/${state.selectedTourId}/route-hint/?from_point=${encodeURIComponent(state.activePointId)}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = {};
+      }
+      if (!res.ok) {
+        const msg =
+          typeof data.detail === 'string' ? data.detail : 'Не удалось получить подсказку.';
+        showRouteToast(msg);
+        return;
+      }
+      if (!data.found) {
+        showRouteToast(
+          typeof data.detail === 'string' ? data.detail : 'Подсказка недоступна.'
+        );
+        return;
+      }
+      applyRouteApiResult(data);
+      showRouteToast('Маршрут по подсказке построен.');
+    } catch (err) {
+      console.error(err);
+      showRouteToast('Ошибка запроса подсказки.');
+    } finally {
+      if (tvTourHintBtn) tvTourHintBtn.disabled = false;
+    }
   }
 
   async function recalculateRouteFromHere() {
@@ -946,6 +994,8 @@
         setLoader(err.message || 'Ошибка загрузки', true);
       });
     });
+
+    tvTourHintBtn?.addEventListener('click', () => fetchTourRouteHint());
   }
 
   function showInfoOverlay(marker) {

@@ -65,27 +65,71 @@ def bfs_shortest_route(
             prev_node[v] = u
             prev_marker[v] = marker_id
             if v == end:
-                nodes: list[int] = []
-                cur = end
-                while cur != start:
-                    nodes.append(cur)
-                    cur = prev_node[cur]
-                nodes.append(start)
-                nodes.reverse()
-                steps: list[dict[str, int]] = []
-                for i in range(len(nodes) - 1):
-                    a, b = nodes[i], nodes[i + 1]
-                    steps.append(
-                        {
-                            "from_point_id": a,
-                            "to_point_id": b,
-                            "marker_id": prev_marker[b],
-                        }
-                    )
-                return nodes, steps
+                return _reconstruct_route(start, end, prev_node, prev_marker)
             q.append(v)
 
     return [], []
+
+
+def _reconstruct_route(
+    start: int,
+    end: int,
+    prev_node: dict[int, int],
+    prev_marker: dict[int, int],
+) -> tuple[list[int], list[dict[str, int]]]:
+    nodes: list[int] = []
+    cur = end
+    while cur != start:
+        nodes.append(cur)
+        cur = prev_node[cur]
+    nodes.append(start)
+    nodes.reverse()
+    steps: list[dict[str, int]] = []
+    for i in range(len(nodes) - 1):
+        a, b = nodes[i], nodes[i + 1]
+        steps.append(
+            {
+                "from_point_id": a,
+                "to_point_id": b,
+                "marker_id": prev_marker[b],
+            }
+        )
+    return nodes, steps
+
+
+def bfs_shortest_route_to_any_end(
+    adj: dict[int, list[tuple[int, int]]],
+    start: int,
+    ends: set[int],
+) -> tuple[list[int], list[dict[str, int]], int | None]:
+    """
+    Shortest path from start to any vertex in ``ends`` (unweighted).
+    Returns (path, steps, end_reached); path/steps empty and end_reached None if unreachable.
+    """
+    if not ends:
+        return [], [], None
+    if start in ends:
+        return [start], [], start
+
+    prev_node: dict[int, int] = {}
+    prev_marker: dict[int, int] = {}
+    visited = {start}
+    q: deque[int] = deque([start])
+
+    while q:
+        u = q.popleft()
+        for v, marker_id in adj.get(u, ()):
+            if v in visited:
+                continue
+            visited.add(v)
+            prev_node[v] = u
+            prev_marker[v] = marker_id
+            if v in ends:
+                path, steps = _reconstruct_route(start, v, prev_node, prev_marker)
+                return path, steps, v
+            q.append(v)
+
+    return [], [], None
 
 
 def route_for_plan(plan_id: int, start_point_id: int, end_point_id: int) -> dict[str, Any]:

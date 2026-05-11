@@ -20,7 +20,12 @@ from .models import (
 from .admin_log import ADDITION, CHANGE, DELETION, log_drf_action
 from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
-from .route_graph import route_for_plan
+from .route_graph import (
+    route_for_plan,
+    build_adjacency,
+    bfs_shortest_route_to_any_end,
+    transition_edges_for_plan,
+)
 from .serializers import (
     EvacPlanSerializer,
     EvacPlanListSerializer,
@@ -331,6 +336,92 @@ class TourViewSet(viewsets.ModelViewSet):
         total = tour.markers.filter(type=PanoramaMarker.MarkerType.INFO).count()
         percent = int(round((viewed / total) * 100)) if total else 0
         return Response({'viewed': viewed, 'total': total, 'percent': percent}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='route-hint')
+    def route_hint(self, request, pk=None):
+        """
+        Кратчайший путь от from_point до любой точки панорамы с непросмотренной info-меткой тура.
+        """
+        tour = self.get_object()
+        plan_id = tour.plan_id
+        raw = request.query_params.get('from_point') or request.query_params.get('start_point')
+        if raw is None:
+            return Response(
+                {'detail': 'Укажите from_point (id точки плана).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            start_id = int(raw)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'from_point должен быть целым числом.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not MapPoint.objects.filter(plan_id=plan_id, id=start_id).exists():
+            return Response(
+                {'detail': 'Точка не найдена или не относится к плану тура.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        viewed_ids = set(
+            TourInfoMarkerView.objects.filter(user=request.user, tour=tour).values_list(
+                'marker_id', flat=True
+            )
+        )
+        markers = (
+            PanoramaMarker.objects.filter(
+                tour_markers__tour_id=tour.id,
+                type=PanoramaMarker.MarkerType.INFO,
+            )
+            .select_related('panorama__point')
+            .distinct()
+        )
+
+        ends: set[int] = set()
+        for m in markers:
+            if m.id in viewed_ids:
+                continue
+            pano = m.panorama
+            if pano and pano.point_id:
+                ends.add(pano.point_id)
+
+        empty = {'found': False, 'path': [], 'steps': [], 'point_names': {}, 'end_point_id': None}
+
+        if not ends:
+            return Response(
+                {
+                    **empty,
+                    'detail': 'Все метки тура уже просмотрены.',
+                }
+            )
+
+        edges = transition_edges_for_plan(plan_id)
+        adj = build_adjacency(edges)
+        path, steps, end_reached = bfs_shortest_route_to_any_end(adj, start_id, ends)
+
+        if not path or end_reached is None:
+            return Response(
+                {
+                    **empty,
+                    'detail': 'Нет пути по переходам к непосещённым меткам тура.',
+                }
+            )
+
+        names = dict(
+            MapPoint.objects.filter(plan_id=plan_id, id__in=path).values_list('id', 'name')
+        )
+        point_names = {str(pid): names.get(pid, '') for pid in path}
+
+        return Response(
+            {
+                'found': True,
+                'end_point_id': end_reached,
+                'path': path,
+                'steps': steps,
+                'point_names': point_names,
+            }
+        )
 
 
 class UserViewSet(viewsets.ModelViewSet):

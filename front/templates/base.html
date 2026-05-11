@@ -60,7 +60,8 @@
                 <li class="nav-item mx-1 d-flex align-items-center">
                     <span class="text-light me-2">
                         👤 {{ user.username }}
-                        {% if user.is_staff %}<span class="badge bg-warning text-dark ms-1">Админ</span>{% endif %}
+                        {% if user.is_staff %}<span class="badge bg-warning text-dark ms-1">Администратор туров</span>{% endif %}
+                        {% if user.is_superuser %}<span class="badge bg-info text-dark ms-1">Администратор пользователей</span>{% endif %}
                     </span>
                 </li>
                 <li class="nav-item mx-1">

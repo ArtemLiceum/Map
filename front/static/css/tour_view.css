@@ -401,6 +401,30 @@
   transition: width 0.2s ease;
 }
 
+.tv-tour-hint-btn {
+  margin-top: 10px;
+  width: 100%;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  background: rgba(37, 99, 235, 0.35);
+  color: #e0f2fe;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tv-tour-hint-btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.55);
+  border-color: rgba(147, 197, 253, 0.55);
+}
+
+.tv-tour-hint-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .tv-route-panel {
   position: absolute;
   bottom: 100%;
