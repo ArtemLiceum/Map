@@ -24,6 +24,21 @@
   const tourProgressTitle = document.getElementById('tvTourProgressTitle');
   const tourProgressText = document.getElementById('tvTourProgressText');
   const tourProgressBarFill = document.getElementById('tvTourProgressBarFill');
+  const minimapRouteSvg = document.getElementById('tvMinimapRoute');
+  const tvRouteStart = document.getElementById('tvRouteStart');
+  const tvRouteEnd = document.getElementById('tvRouteEnd');
+  const tvRouteBuild = document.getElementById('tvRouteBuild');
+  const tvRouteClear = document.getElementById('tvRouteClear');
+  const tvRouteStatus = document.getElementById('tvRouteStatus');
+  const tvRouteDeviation = document.getElementById('tvRouteDeviation');
+  const tvRouteDeviationText = document.getElementById('tvRouteDeviationText');
+  const tvRouteRecalc = document.getElementById('tvRouteRecalc');
+  const tvRouteCancelRoute = document.getElementById('tvRouteCancelRoute');
+  const tvRouteRecalcHint = document.getElementById('tvRouteRecalcHint');
+  const tvRoutePanel = document.getElementById('tvRoutePanel');
+  const tvRoutePanelToggle = document.getElementById('tvRoutePanelToggle');
+  const tvRoutePanelClose = document.getElementById('tvRoutePanelClose');
+  const tvRouteToast = document.getElementById('tvRouteToast');
 
   const DRAG_THRESHOLD = 5; // px — minimal movement to consider it a drag
   const MINIMAP_MAX_DEFAULT = 440;
@@ -53,8 +68,336 @@
     tours: [],
     selectedTourId: null,
     minimapCollapsed: false,
-    minimapZoom: 1
+    minimapZoom: 1,
+    /** @type {null | { endPointId: number, path: number[], steps: {from_point_id:number,to_point_id:number,marker_id:number}[], deviation: 'none'|'blocked' }} */
+    route: null,
+    /** @type {null | { fromId: number, markerId: number, toId: number }} */
+    pendingRouteNav: null
   };
+
+  let arrivedToastTimer = null;
+  let routeToastTimer = null;
+
+  function routeStorageKey() {
+    return `tourRoute:${PLAN_ID}`;
+  }
+
+  function hideRecalcHint() {
+    if (!tvRouteRecalcHint) return;
+    tvRouteRecalcHint.classList.add('hidden');
+    tvRouteRecalcHint.textContent = '';
+  }
+
+  function hideDeviationBanner() {
+    tvRouteDeviation?.classList.add('hidden');
+    hideRecalcHint();
+  }
+
+  function setRouteStatus(text) {
+    if (tvRouteStatus) tvRouteStatus.textContent = text || '';
+  }
+
+  function syncRouteStartSelectFromActive() {
+    if (!tvRouteStart || state.activePointId == null) return;
+    const v = String(state.activePointId);
+    if ([...tvRouteStart.options].some(o => o.value === v)) {
+      tvRouteStart.value = v;
+    }
+  }
+
+  function setRoutePanelVisible(open) {
+    if (!tvRoutePanel || !tvRoutePanelToggle) return;
+    tvRoutePanel.classList.toggle('hidden', !open);
+    tvRoutePanelToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) syncRouteStartSelectFromActive();
+  }
+
+  function saveRouteToStorage() {
+    const r = state.route;
+    if (!r || r.deviation === 'blocked') return;
+    try {
+      sessionStorage.setItem(
+        routeStorageKey(),
+        JSON.stringify({
+          endPointId: r.endPointId,
+          path: r.path,
+          steps: r.steps
+        })
+      );
+    } catch (_) {
+      /* ignore quota */
+    }
+  }
+
+  function tryRestoreRouteFromStorage() {
+    try {
+      const raw = sessionStorage.getItem(routeStorageKey());
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const ids = new Set(state.points.map(p => p.id));
+      if (!saved.path || !Array.isArray(saved.path) || !saved.path.every(id => ids.has(id))) {
+        sessionStorage.removeItem(routeStorageKey());
+        return;
+      }
+      state.route = {
+        endPointId: Number(saved.endPointId),
+        path: saved.path.map(Number),
+        steps: (saved.steps || []).map(s => ({
+          from_point_id: Number(s.from_point_id),
+          to_point_id: Number(s.to_point_id),
+          marker_id: Number(s.marker_id)
+        })),
+        deviation: 'none'
+      };
+    } catch (_) {
+      try {
+        sessionStorage.removeItem(routeStorageKey());
+      } catch (__) {
+        /* ignore */
+      }
+    }
+  }
+
+  function clearRoute() {
+    state.route = null;
+    state.pendingRouteNav = null;
+    try {
+      sessionStorage.removeItem(routeStorageKey());
+    } catch (_) {
+      /* ignore */
+    }
+    updateRoutePolyline();
+    applyRouteNavHighlights();
+    hideDeviationBanner();
+    setRouteStatus('');
+    if (state.activePointId != null) highlightMinimap(state.activePointId);
+  }
+
+  function updateRoutePolyline() {
+    const svg = minimapRouteSvg || document.getElementById('tvMinimapRoute');
+    if (!svg) return;
+    const r = state.route;
+    if (!r || r.deviation === 'blocked' || !r.path?.length) {
+      svg.innerHTML = '';
+      return;
+    }
+    const pairs = [];
+    for (const id of r.path) {
+      const p = state.points.find(x => x.id === id);
+      if (p) pairs.push(`${Number(p.x)},${Number(p.y)}`);
+    }
+    if (pairs.length < 2) {
+      svg.innerHTML = '';
+      return;
+    }
+    svg.innerHTML = `<polyline fill="none" points="${pairs.join(' ')}" />`;
+  }
+
+  function setRouteDeviation(message) {
+    if (!state.route || state.route.deviation === 'blocked') return;
+    state.route.deviation = 'blocked';
+    updateRoutePolyline();
+    applyRouteNavHighlights();
+    if (tvRouteDeviationText) {
+      tvRouteDeviationText.textContent = message || 'Вы сошли с маршрута.';
+    }
+    tvRouteDeviation?.classList.remove('hidden');
+    hideRecalcHint();
+  }
+
+  function populateRouteSelects() {
+    if (!tvRouteStart || !tvRouteEnd) return;
+    const prevE = tvRouteEnd.value;
+    tvRouteStart.innerHTML = '';
+    tvRouteEnd.innerHTML = '';
+    state.points.forEach(p => {
+      const o1 = document.createElement('option');
+      o1.value = String(p.id);
+      o1.textContent = p.name || `Точка ${p.id}`;
+      tvRouteStart.appendChild(o1.cloneNode(true));
+      tvRouteEnd.appendChild(o1);
+    });
+    const ids = new Set(state.points.map(p => p.id));
+    const activeId = state.activePointId;
+    if (activeId != null && ids.has(activeId)) {
+      tvRouteStart.value = String(activeId);
+    } else if (state.points.length) {
+      tvRouteStart.value = String(state.points[0].id);
+    }
+    if (prevE && [...tvRouteEnd.options].some(o => o.value === prevE)) {
+      tvRouteEnd.value = prevE;
+    } else if (state.points.length > 1) {
+      const startNum = Number(tvRouteStart.value);
+      const other = state.points.find(p => p.id !== startNum) || state.points[0];
+      tvRouteEnd.value = String(other.id);
+    }
+  }
+
+  /**
+   * Миникарта: с текущей позиции path[i] разрешён только переход на path[i] (no-op) или path[i+1].
+   * Любая другая точка — сход с маршрута (баннер), переход всё равно выполняется.
+   */
+  function validateMinimapAgainstRoute(targetId) {
+    const r = state.route;
+    if (!r || r.deviation === 'blocked') return;
+    if (targetId === state.activePointId) return;
+    const i = r.path.indexOf(state.activePointId);
+    if (i === -1) {
+      setRouteDeviation('Вы сошли с маршрута.');
+      return;
+    }
+    if (i === r.path.length - 1) {
+      if (targetId !== state.activePointId) {
+        setRouteDeviation('Вы сошли с маршрута.');
+      }
+      return;
+    }
+    const next = r.path[i + 1];
+    if (targetId === next) return;
+    setRouteDeviation('Вы сошли с маршрута.');
+  }
+
+  function processPendingRouteNav() {
+    const pending = state.pendingRouteNav;
+    state.pendingRouteNav = null;
+    if (!pending) return;
+    if (!state.route || state.route.deviation === 'blocked') return;
+    const r = state.route;
+    const i = r.path.indexOf(pending.fromId);
+    if (i === -1 || i >= r.path.length - 1) {
+      setRouteDeviation('Вы сошли с маршрута.');
+      return;
+    }
+    const step = r.steps[i];
+    if (!step || pending.toId !== r.path[i + 1] || pending.markerId !== step.marker_id) {
+      setRouteDeviation('Вы сошли с маршрута.');
+    }
+  }
+
+  function applyRouteNavHighlights() {
+    if (!state.markers?.length) return;
+    state.markers.forEach(({ data, el }) => {
+      el.classList.remove('is-route-next', 'is-route-dim');
+      if (data.type === 'info') return;
+      const r = state.route;
+      if (!r || r.deviation === 'blocked') return;
+      const i = r.path.indexOf(state.activePointId);
+      if (i === -1 || i >= r.path.length - 1) return;
+      const step = r.steps[i];
+      if (!step) return;
+      if (data.id === step.marker_id && data.target_point === r.path[i + 1]) {
+        el.classList.add('is-route-next');
+      } else {
+        el.classList.add('is-route-dim');
+      }
+    });
+  }
+
+  function checkRouteArrival() {
+    const r = state.route;
+    if (!r || r.deviation === 'blocked') return;
+    if (!r.path.length) return;
+    if (state.activePointId === r.endPointId) {
+      showArrivedToast();
+      clearRoute();
+    }
+  }
+
+  function showArrivedToast() {
+    const el = document.getElementById('tvRouteArrived');
+    if (!el) return;
+    el.classList.remove('hidden');
+    if (arrivedToastTimer) clearTimeout(arrivedToastTimer);
+    arrivedToastTimer = setTimeout(() => {
+      el.classList.add('hidden');
+      arrivedToastTimer = null;
+    }, 2200);
+  }
+
+  function showRouteToast(message) {
+    const el = tvRouteToast || document.getElementById('tvRouteToast');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.remove('hidden');
+    if (routeToastTimer) clearTimeout(routeToastTimer);
+    routeToastTimer = setTimeout(() => {
+      el.classList.add('hidden');
+      routeToastTimer = null;
+    }, 2200);
+  }
+
+  async function fetchAndApplyRoute(startId, endId) {
+    setRouteStatus('');
+    hideRecalcHint();
+    const url = `/api/evac_plans/${PLAN_ID}/route/?start_point=${encodeURIComponent(startId)}&end_point=${encodeURIComponent(endId)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      let detail = 'Ошибка запроса маршрута.';
+      try {
+        const err = await res.json();
+        if (err.detail) detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+      } catch (_) {
+        /* ignore */
+      }
+      setRouteStatus(detail);
+      setRoutePanelVisible(true);
+      return false;
+    }
+    const data = await res.json();
+    if (!data.found) {
+      setRouteStatus('Маршрут не найден для выбранных точек.');
+      setRoutePanelVisible(true);
+      return false;
+    }
+    state.route = {
+      endPointId: endId,
+      path: data.path,
+      steps: data.steps || [],
+      deviation: 'none'
+    };
+    saveRouteToStorage();
+    hideDeviationBanner();
+    updateRoutePolyline();
+    highlightMinimap(state.activePointId);
+    applyRouteNavHighlights();
+    setRouteStatus('');
+    showRouteToast('Маршрут построен.');
+    return true;
+  }
+
+  async function recalculateRouteFromHere() {
+    if (!state.route) return;
+    hideRecalcHint();
+    const end = state.route.endPointId;
+    const start = state.activePointId;
+    const ok = await fetchAndApplyRoute(start, end);
+    if (!ok && state.route?.deviation === 'blocked' && tvRouteRecalcHint) {
+      tvRouteRecalcHint.textContent =
+        'До цели из этой точки маршрут недоступен. Отмените маршрут или перейдите к другой точке.';
+      tvRouteRecalcHint.classList.remove('hidden');
+    }
+  }
+
+  async function onRouteBuildClick() {
+    if (!tvRouteStart || !tvRouteEnd) return;
+    const s = Number(tvRouteStart.value);
+    const e = Number(tvRouteEnd.value);
+    if (!Number.isFinite(s) || !Number.isFinite(e)) {
+      setRouteStatus('Выберите старт и финиш.');
+      setRoutePanelVisible(true);
+      return;
+    }
+    try {
+      if (tvRouteBuild) tvRouteBuild.disabled = true;
+      await fetchAndApplyRoute(s, e);
+    } catch (err) {
+      console.error(err);
+      setRouteStatus('Не удалось построить маршрут.');
+      setRoutePanelVisible(true);
+    } finally {
+      if (tvRouteBuild) tvRouteBuild.disabled = false;
+    }
+  }
 
   function setLoader(text, visible = true) {
     if (!loaderEl) return;
@@ -77,7 +420,11 @@
     state.plan = plan;
     state.points = Array.isArray(plan.points) ? plan.points : [];
     state.activePointId = pickInitialPointId(state.points);
+    populateRouteSelects();
     renderMinimap();
+    tryRestoreRouteFromStorage();
+    updateRoutePolyline();
+    highlightMinimap(state.activePointId);
     if (state.activePointId) {
       await loadScene(state.activePointId);
     } else {
@@ -202,9 +549,13 @@
 
   async function loadScene(pointId) {
     const point = state.points.find(p => p.id === pointId);
-    if (!point) return;
+    if (!point) {
+      state.pendingRouteNav = null;
+      return;
+    }
     const pano = point.panorama;
     if (!pano || !pano.image) {
+      state.pendingRouteNav = null;
       setLoader('Для точки нет панорамы', true);
       return;
     }
@@ -225,7 +576,12 @@
 
     buildNavMarkers(pano.markers || []);
 
+    applyRouteNavHighlights();
+    processPendingRouteNav();
+    checkRouteArrival();
+
     highlightMinimap(pointId);
+    syncRouteStartSelectFromActive();
     setTimeout(() => toggleFade(false), 50);
     setLoader('', false);
   }
@@ -393,8 +749,12 @@
   }
 
   function switchToPoint(pointId) {
-    if (pointId === state.activePointId) return;
+    if (pointId === state.activePointId) {
+      state.pendingRouteNav = null;
+      return;
+    }
     loadScene(pointId).catch(err => {
+      state.pendingRouteNav = null;
       console.error(err);
       setLoader(err.message || 'Ошибка загрузки', true);
       toggleFade(false);
@@ -464,10 +824,12 @@
       btn.type = 'button';
       btn.title = p.name || 'Точка';
       btn.dataset.pointId = String(p.id);
-      btn.addEventListener('click', () => switchToPoint(p.id));
+      btn.addEventListener('click', () => {
+        validateMinimapAgainstRoute(p.id);
+        switchToPoint(p.id);
+      });
       minimapPointsEl.appendChild(btn);
     });
-    highlightMinimap(state.activePointId);
 
     const onMinimapImgReady = () => {
       applyMinimapDimensions();
@@ -481,9 +843,14 @@
 
   function highlightMinimap(activeId) {
     const nodes = minimapPointsEl.querySelectorAll('.tv-minimap-point');
+    const pathSet =
+      state.route && state.route.deviation !== 'blocked' && Array.isArray(state.route.path)
+        ? new Set(state.route.path)
+        : null;
     nodes.forEach(node => {
       const pid = Number(node.dataset.pointId);
       node.classList.toggle('active', pid === activeId);
+      node.classList.toggle('on-route', !!(pathSet && pathSet.has(pid)));
     });
   }
 
@@ -512,7 +879,16 @@
         return;
       }
       const targetId = Number(marker.dataset.targetPoint);
-      if (targetId) switchToPoint(targetId);
+      if (targetId) {
+        if (markerData) {
+          state.pendingRouteNav = {
+            fromId: state.activePointId,
+            markerId: markerData.id,
+            toId: targetId
+          };
+        }
+        switchToPoint(targetId);
+      }
     });
 
     minimapToggleEl.addEventListener('click', () => {
@@ -537,12 +913,30 @@
     minimapZoomOutEl?.addEventListener('click', () => nudgeMinimapZoom(-1));
     minimapZoomInEl?.addEventListener('click', () => nudgeMinimapZoom(1));
 
+    tvRoutePanelToggle?.addEventListener('click', () => {
+      if (!tvRoutePanel) return;
+      setRoutePanelVisible(tvRoutePanel.classList.contains('hidden'));
+    });
+
+    tvRoutePanelClose?.addEventListener('click', () => setRoutePanelVisible(false));
+
+    tvRouteBuild?.addEventListener('click', () => onRouteBuildClick());
+    tvRouteClear?.addEventListener('click', () => clearRoute());
+    tvRouteRecalc?.addEventListener('click', () => {
+      if (tvRouteRecalc) tvRouteRecalc.disabled = true;
+      recalculateRouteFromHere().finally(() => {
+        if (tvRouteRecalc) tvRouteRecalc.disabled = false;
+      });
+    });
+    tvRouteCancelRoute?.addEventListener('click', () => clearRoute());
+
     infoOverlayClose?.addEventListener('click', hideInfoOverlay);
     infoOverlay?.addEventListener('click', (ev) => {
       if (ev.target === infoOverlay) hideInfoOverlay();
     });
 
     tourSelect?.addEventListener('change', () => {
+      clearRoute();
       const val = tourSelect.value;
       state.selectedTourId = val ? Number(val) : null;
       renderTourProgress();

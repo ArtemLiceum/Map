@@ -90,6 +90,16 @@
   opacity: 1;
 }
 
+.tv-nav-marker.is-route-next {
+  border-color: rgba(250, 204, 21, 0.95);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.35), 0 6px 24px rgba(250, 204, 21, 0.35);
+  background: rgba(180, 83, 9, 0.88);
+}
+
+.tv-nav-marker.is-route-dim:not(.is-info) {
+  opacity: 0.45;
+}
+
 .tv-nav-marker:hover {
   transform: translate(-50%, -50%) scale(1.12);
   border-color: rgba(255, 255, 255, 0.7);
@@ -138,10 +148,25 @@
   opacity: 1;
 }
 
-.tv-minimap {
+/* Миникарта + кнопка «Маршрут» + всплывающая панель построения пути */
+.tv-minimap-stack {
   position: absolute;
   left: 16px;
   bottom: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.tv-minimap-stack .tv-minimap {
+  position: relative;
+  left: auto;
+  bottom: auto;
+}
+
+.tv-minimap {
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
@@ -267,6 +292,33 @@
   box-shadow: 0 0 0 10px rgba(34, 211, 238, 0.18);
 }
 
+.tv-minimap-point.on-route:not(.active) {
+  background: #a855f7;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 6px rgba(168, 85, 247, 0.2);
+}
+
+.tv-minimap-route {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tv-minimap-route polyline {
+  stroke: rgba(250, 204, 21, 0.95);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+}
+
+.tv-minimap-points {
+  z-index: 1;
+}
+
 .tv-back {
   position: absolute;
   top: 16px;
@@ -349,6 +401,238 @@
   transition: width 0.2s ease;
 }
 
+.tv-route-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  z-index: 3;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  font-size: 13px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.tv-route-panel.hidden {
+  display: none;
+}
+
+.tv-route-panel-toggle {
+  margin-top: 8px;
+  align-self: stretch;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tv-route-panel-toggle:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tv-route-panel-toggle[aria-expanded="true"] {
+  background: rgba(37, 99, 235, 0.92);
+  border-color: rgba(147, 197, 253, 0.45);
+}
+
+.tv-route-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tv-route-panel-title {
+  font-weight: 600;
+  margin: 0;
+  color: #e2e8f0;
+  flex: 1;
+  min-width: 0;
+}
+
+.tv-route-panel-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tv-route-panel-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.tv-route-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tv-route-row label {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.tv-route-row select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.tv-route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tv-route-primary,
+.tv-route-secondary {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.tv-route-primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.tv-route-primary:hover {
+  background: #1d4ed8;
+}
+
+.tv-route-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tv-route-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tv-route-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #fbbf24;
+  min-height: 1.2em;
+}
+
+.tv-route-deviation {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(30, 27, 20, 0.92);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  color: #fef3c7;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.tv-route-deviation.hidden {
+  display: none;
+}
+
+.tv-route-deviation-text {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.tv-route-deviation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tv-route-recalc-hint {
+  margin: 10px 0 0 0;
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+.tv-route-recalc-hint.hidden {
+  display: none;
+}
+
+.tv-route-arrived {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  padding: 14px 22px;
+  border-radius: 12px;
+  background: rgba(22, 101, 52, 0.92);
+  color: #ecfdf5;
+  font-size: 17px;
+  font-weight: 600;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.tv-route-arrived.hidden {
+  display: none;
+}
+
+.tv-route-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 14px 22px;
+  border-radius: 12px;
+  background: rgba(30, 58, 138, 0.94);
+  color: #eff6ff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.tv-route-toast.hidden {
+  display: none;
+}
+
 @media (max-width: 600px) {
   .tv-minimap:not(.tv-minimap--collapsed) {
     width: 360px;
@@ -366,6 +650,17 @@
   .tv-back {
     top: 10px;
     left: 10px;
+  }
+  .tv-minimap-stack {
+    left: 10px;
+    bottom: 10px;
+  }
+  .tv-route-panel {
+    max-width: min(260px, calc(100vw - 20px));
+    font-size: 12px;
+  }
+  .tv-route-deviation {
+    bottom: 88px;
   }
 }
 

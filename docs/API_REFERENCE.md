@@ -163,6 +163,15 @@ Content-Type: multipart/form-data
 GET /api/evac_plans/{id}/
 ```
 
+#### Маршрут по переходам (кратчайший путь по transition-маркерам)
+```http
+GET /api/evac_plans/{id}/route/?start_point={MapPoint.id}&end_point={MapPoint.id}
+```
+
+Доступно без авторизации. Обе точки должны принадлежать плану `{id}`.
+
+**Ответ 200:** `found` (bool), `path` (массив id точек), `steps` (массив шагов `{ from_point_id, to_point_id, marker_id }`), `point_names` (объект id→имя). Если пути нет: `found: false`, пустые `path` и `steps`.
+
 #### Обновить план
 ```http
 PATCH /api/evac_plans/{id}/

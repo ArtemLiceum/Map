@@ -20,6 +20,7 @@ from .models import (
 from .admin_log import ADDITION, CHANGE, DELETION, log_drf_action
 from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
+from .route_graph import route_for_plan
 from .serializers import (
     EvacPlanSerializer,
     EvacPlanListSerializer,
@@ -94,6 +95,11 @@ class AdminOnlyViewSetMixin:
 class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     queryset = EvacPlan.objects.all()
 
+    def get_permissions(self):
+        if self.action == 'route':
+            return [AllowAny()]
+        return super().get_permissions()
+
     def get_serializer_class(self):
         if self.action == 'list':
             return EvacPlanListSerializer
@@ -164,6 +170,37 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
                 | Q(type=PanoramaMarker.MarkerType.INFO, tours__id=tour_id)
             ).distinct()
         return base_qs.filter(type=PanoramaMarker.MarkerType.TRANSITION)
+
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='route',
+        permission_classes=[AllowAny],
+    )
+    def route(self, request, pk=None):
+        """Кратчайший путь по transition-маркерам: query start_point, end_point (id MapPoint)."""
+        self.get_object()
+        raw_s = request.query_params.get('start_point')
+        raw_e = request.query_params.get('end_point')
+        if raw_s is None or raw_e is None:
+            return Response(
+                {'detail': 'Укажите параметры start_point и end_point.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            start_id = int(raw_s)
+            end_id = int(raw_e)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'start_point и end_point должны быть целыми числами.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = route_for_plan(int(pk), start_id, end_id)
+        err = result.get('error')
+        if err:
+            return Response({'detail': err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
 
 
 class MapPointViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):

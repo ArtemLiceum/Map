@@ -17,7 +17,40 @@
         <div class="tv-loader" id="tvLoader">Загрузка...</div>
     </div>
 
-    <div class="tv-minimap" id="tvMinimap">
+    <div class="tv-minimap-stack" id="tvMinimapStack">
+        <div
+            class="tv-route-panel hidden"
+            id="tvRoutePanel"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="tvRoutePanelTitle"
+        >
+        <div class="tv-route-panel-header">
+            <div class="tv-route-panel-title" id="tvRoutePanelTitle">Маршрут</div>
+            <button
+                type="button"
+                class="tv-route-panel-close"
+                id="tvRoutePanelClose"
+                aria-label="Свернуть панель маршрута"
+                title="Свернуть"
+            >×</button>
+        </div>
+        <div class="tv-route-row">
+            <label for="tvRouteStart">Старт</label>
+            <select id="tvRouteStart"></select>
+        </div>
+        <div class="tv-route-row">
+            <label for="tvRouteEnd">Финиш</label>
+            <select id="tvRouteEnd"></select>
+        </div>
+        <div class="tv-route-actions">
+            <button type="button" class="tv-route-primary" id="tvRouteBuild">Построить</button>
+            <button type="button" class="tv-route-secondary" id="tvRouteClear">Сбросить</button>
+        </div>
+        <div id="tvRouteStatus" class="tv-route-status" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="tv-minimap" id="tvMinimap">
         <div class="tv-minimap-zoom" id="tvMinimapZoom" role="group" aria-label="Масштаб миникарты">
             <button class="tv-minimap-zoom-btn" id="tvMinimapZoomOut" type="button" aria-label="Уменьшить масштаб миникарты" title="Уменьшить">−</button>
             <button class="tv-minimap-zoom-btn" id="tvMinimapZoomIn" type="button" aria-label="Увеличить масштаб миникарты" title="Увеличить">+</button>
@@ -27,11 +60,42 @@
         </button>
         <div class="tv-minimap-body" id="tvMinimapBody">
             <img id="tvMinimapImage" alt="План" class="tv-minimap-img">
+            <svg
+                class="tv-minimap-route"
+                id="tvMinimapRoute"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+            ></svg>
             <div class="tv-minimap-points" id="tvMinimapPoints"></div>
         </div>
+        </div>
+
+        <button
+            type="button"
+            class="tv-route-panel-toggle"
+            id="tvRoutePanelToggle"
+            aria-expanded="false"
+            aria-controls="tvRoutePanel"
+            title="Открыть или закрыть панель маршрута"
+        >
+            Маршрут
+        </button>
     </div>
 
     <button class="tv-back" id="tvBack" type="button" onclick="history.back()">← Назад</button>
+
+    <div id="tvRouteDeviation" class="tv-route-deviation hidden" role="alert">
+        <p id="tvRouteDeviationText" class="tv-route-deviation-text"></p>
+        <div class="tv-route-deviation-actions">
+            <button type="button" class="tv-route-primary" id="tvRouteRecalc">Пересчитать отсюда</button>
+            <button type="button" class="tv-route-secondary" id="tvRouteCancelRoute">Отменить маршрут</button>
+        </div>
+        <p id="tvRouteRecalcHint" class="tv-route-recalc-hint hidden" role="status"></p>
+    </div>
+
+    <div id="tvRouteArrived" class="tv-route-arrived hidden" role="status" aria-live="polite">Вы прибыли</div>
+    <div id="tvRouteToast" class="tv-route-toast hidden" role="status" aria-live="polite"></div>
     {% if is_auth %}
     <div class="tv-toolbar">
         <label class="tv-tour-select">
