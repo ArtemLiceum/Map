@@ -1,7 +1,16 @@
 from django.contrib import admin
 from django.contrib.admin.models import ACTION_FLAG_CHOICES, LogEntry
 
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourMarker, TourInfoMarkerView
+from .models import (
+    EvacPlan,
+    Facility,
+    MapPoint,
+    Panorama,
+    PanoramaMarker,
+    Tour,
+    TourInfoMarkerView,
+    TourMarker,
+)
 
 
 @admin.register(LogEntry)
@@ -46,11 +55,18 @@ class MapPointInline(admin.TabularInline):
 
 @admin.register(EvacPlan)
 class EvacPlanAdmin(admin.ModelAdmin):
-    list_display = ('title', 'floor', 'created_at')
-    list_filter = ('floor',)
-    search_fields = ('title',)
-    ordering = ('floor', 'title')
+    list_display = ("title", "floor", "facility", "created_at")
+    list_filter = ("facility", "floor")
+    search_fields = ("title",)
+    ordering = ("facility_id", "floor", "title")
     inlines = [MapPointInline]
+
+
+@admin.register(Facility)
+class FacilityAdmin(admin.ModelAdmin):
+    list_display = ("title", "created_at")
+    search_fields = ("title",)
+    ordering = ("title",)
 
 
 @admin.register(MapPoint)

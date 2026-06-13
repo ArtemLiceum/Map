@@ -33,6 +33,7 @@ const markerType = document.getElementById('markerType');
 const markerTransitionFields = document.getElementById('markerTransitionFields');
 const markerInfoFields = document.getElementById('markerInfoFields');
 const markerLabel = document.getElementById('markerLabel');
+const targetPlanSelect = document.getElementById('targetPlanSelect');
 const targetSearch = document.getElementById('targetSearch');
 const targetPointSelect = document.getElementById('targetPointSelect');
 const infoLabel = document.getElementById('infoLabel');
@@ -42,6 +43,17 @@ const infoToursHint = document.getElementById('infoToursHint');
 const markerSaveBtn = document.getElementById('markerSaveBtn');
 const markerDeleteBtn = document.getElementById('markerDeleteBtn');
 const markerCancelBtn = document.getElementById('markerCancelBtn');
+const entryAzimuthPickerWrap = document.getElementById('entryAzimuthPickerWrap');
+const entryAzimuthPicker = document.getElementById('entryAzimuthPicker');
+const entryAzimuthPanoImg = document.getElementById('entryAzimuthPanoImg');
+const entryAzimuthCursor = document.getElementById('entryAzimuthCursor');
+const entryAzimuthValue = document.getElementById('entryAzimuthValue');
+const entryAzimuthReset = document.getElementById('entryAzimuthReset');
+const entryAzimuthNoPanoHint = document.getElementById('entryAzimuthNoPanoHint');
+const entryAzimuthHint = document.getElementById('entryAzimuthHint');
+// Legacy refs kept for backward compat (elements hidden via CSS)
+const entryAzimuthAuto = document.getElementById('entryAzimuthAuto');
+const entryAzimuthInput = document.getElementById('entryAzimuthInput');
 const planCropExistingBtn = document.getElementById('planCropExistingBtn');
 const panoramaCropBtn = document.getElementById('panoramaCropBtn');
 const panoramaReplaceBtn = document.getElementById('panoramaReplaceBtn');
@@ -54,12 +66,24 @@ const cropCancelBtn = document.getElementById('cropCancelBtn');
 const cropPreview = document.getElementById('cropPreview');
 const cropAspectInputs = document.querySelectorAll('input[name="cropAspect"]');
 
+// --- Facility UI ---
+const facilitySelect = document.getElementById('facilitySelect');
+const facilityAssignBtn = document.getElementById('facilityAssignBtn');
+const facilitiesList = document.getElementById('facilitiesList');
+const addFacilityBtn = document.getElementById('addFacilityBtn');
+const facilityPlansList = document.getElementById('facilityPlansList');
+
 let cropper = null;
 
 let tempPointCoords = null;
 let editingPoint = null;
 let lastDragAt = 0;
 let markerDraft = null;
+let facilityState = {
+  list: [],
+  selectedId: null,
+  selectedPlans: [],
+};
 
 // --- API helpers ---
 
@@ -125,6 +149,13 @@ async function createPoint(planId, name, x, y) {
   });
   if (!res.ok) throw new Error('Ошибка создания точки');
   return await res.json();
+}
+
+async function fetchMapPointsForPlan(planId) {
+  const res = await apiFetch(`${API.createPoint}?plan=${planId}`);
+  if (!res.ok) throw new Error('Не удалось загрузить точки плана');
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 async function updateMapPoint(id, payload) {
@@ -205,6 +236,68 @@ async function fetchTours(planId) {
   const res = await apiFetch(`${API.createTour}?plan=${planId}`);
   if (res.status === 401) throw new Error('Требуется авторизация для просмотра туров');
   if (!res.ok) throw new Error('Не удалось загрузить туры');
+  return await res.json();
+}
+
+async function fetchFacilities() {
+  const res = await apiFetch('/api/facilities/');
+  if (!res.ok) throw new Error('Не удалось загрузить список facilities');
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchFacilityDetail(id) {
+  const res = await apiFetch(`/api/facilities/${id}/`);
+  if (!res.ok) throw new Error('Не удалось загрузить facility');
+  return await res.json();
+}
+
+async function createFacility(title) {
+  const res = await apiFetch('/api/facilities/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Ошибка создания facility');
+  return await res.json();
+}
+
+async function updateFacility(id, payload) {
+  const res = await apiFetch(`/api/facilities/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Ошибка обновления facility');
+  return await res.json();
+}
+
+async function deleteFacilityRequest(id) {
+  const res = await apiFetch(`/api/facilities/${id}/`, { method: 'DELETE' });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Ошибка удаления facility');
+  return true;
+}
+
+async function patchPlanFacility(planId, facilityIdOrNull) {
+  const payload = { facility: facilityIdOrNull };
+  const res = await apiFetch(`${API.createPlan}${planId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) throw new Error('Не удалось обновить объект у плана');
   return await res.json();
 }
 
@@ -377,7 +470,7 @@ async function loadPlanFromServer(planId) {
   if (!res.ok) throw new Error('Не удалось загрузить план');
   const data = await res.json();
 
-  state.plan = { id: data.id, title: data.title, imageUrl: data.image };
+  state.plan = { id: data.id, title: data.title, imageUrl: data.image, facility_id: data.facility_id ?? null };
   state.points = (data.points || []).map(pt => ({
     id: pt.id,
     name: pt.name,
@@ -393,6 +486,7 @@ async function loadPlanFromServer(planId) {
 
   if (planTitle) planTitle.value = state.plan.title || '';
   await refreshTours(planId);
+  await refreshFacilitiesUI().catch(err => console.warn(err));
   saveState();
   renderAll();
 }
@@ -431,7 +525,12 @@ planUpload.addEventListener('change', async e => {
     // Если план уже есть — предлагаем заменить картинку в текущем плане
     if (hasExisting && confirm('Заменить изображение текущего плана без пересоздания?')) {
       const updated = await updatePlanImage(state.plan.id, croppedFile, crop, titleFromInput || state.plan.title);
-      state.plan = { id: updated.id, title: updated.title, imageUrl: updated.image };
+      state.plan = {
+        id: updated.id,
+        title: updated.title,
+        imageUrl: updated.image,
+        facility_id: updated.facility_id ?? (state.plan?.facility_id ?? null)
+      };
       if (planTitle) planTitle.value = updated.title || '';
       saveState(); renderAll();
       return;
@@ -439,7 +538,7 @@ planUpload.addEventListener('change', async e => {
 
     // Иначе создаём новый план
     const planData = await uploadPlan(croppedFile, title, crop);
-    state.plan = { id: planData.id, title: planData.title, imageUrl: planData.image };
+    state.plan = { id: planData.id, title: planData.title, imageUrl: planData.image, facility_id: planData.facility_id ?? null };
     state.points = [];
     await refreshTours(state.plan.id);
     if (planTitle) planTitle.value = planData.title || '';
@@ -589,6 +688,80 @@ function renderAll() {
     </div>`).join('') || '<div class="small">Точек пока нет</div>';
 
   renderTours();
+  renderFacilities();
+}
+
+function renderFacilities() {
+  if (!facilitySelect || !facilitiesList || !facilityPlansList) return;
+
+  // Select options
+  facilitySelect.innerHTML = '';
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '';
+  noneOpt.textContent = 'Без объекта';
+  facilitySelect.appendChild(noneOpt);
+  (facilityState.list || []).forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = String(f.id);
+    opt.textContent = f.title ? `${f.title} (ID: ${f.id})` : `Facility ${f.id}`;
+    facilitySelect.appendChild(opt);
+  });
+
+  const currentPlanFacilityId = state.plan?.facility_id ?? null;
+  facilitySelect.value = currentPlanFacilityId ? String(currentPlanFacilityId) : '';
+
+  // Facilities list with actions
+  if (!(facilityState.list || []).length) {
+    facilitiesList.innerHTML = '<div class="small">Facilities пока не созданы</div>';
+  } else {
+    facilitiesList.innerHTML = facilityState.list.map(f => `
+      <div class="admin-list-row">
+        <div class="admin-list-row__meta">
+          <b>${adminEscapeHtml(f.title)}</b> <span class="small">(ID: ${f.id})</span>
+        </div>
+        <div class="admin-list-row__actions">
+          <button type="button" data-facility-action="select" data-facility-id="${f.id}" title="Показать планы">📋</button>
+          <button type="button" data-facility-action="rename" data-facility-id="${f.id}" title="Переименовать">✏️</button>
+          <button type="button" data-facility-action="delete" data-facility-id="${f.id}" title="Удалить">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Plans list in selected facility
+  const selectedTitle = facilityState.selectedId
+    ? (facilityState.list.find(x => sameEntityId(x.id, facilityState.selectedId))?.title || `ID ${facilityState.selectedId}`)
+    : null;
+
+  if (!facilityState.selectedId) {
+    facilityPlansList.innerHTML = '<div class="small">Выберите объект в списке, чтобы посмотреть планы</div>';
+    return;
+  }
+
+  const plans = facilityState.selectedPlans || [];
+  if (!plans.length) {
+    facilityPlansList.innerHTML = `<div class="small">В объекте «${adminEscapeHtml(selectedTitle)}» планов нет</div>`;
+    return;
+  }
+  facilityPlansList.innerHTML = plans.map(p => `
+    <div class="admin-list-row">
+      <div class="admin-list-row__meta">
+        <b>${adminEscapeHtml(p.title)}</b>
+        <span class="small">этаж: ${adminEscapeHtml(p.floor)}</span>
+        <span class="small">(ID: ${p.id})</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function refreshFacilitiesUI() {
+  facilityState.list = await fetchFacilities();
+  // Keep selected id if it still exists, else reset.
+  if (facilityState.selectedId && !facilityState.list.find(f => sameEntityId(f.id, facilityState.selectedId))) {
+    facilityState.selectedId = null;
+    facilityState.selectedPlans = [];
+  }
+  renderFacilities();
 }
 
 function renderTours() {
@@ -773,6 +946,116 @@ async function openPanorama(point){
   img.style.cursor = 'crosshair';
   panoramaView.appendChild(img);
 
+  // --- Transition target plan/points context (for marker modal) ---
+  const currentPlanId = Number(state.plan?.id);
+  const currentFacilityId = state.plan?.facility_id ?? null;
+  let markerTargetPlans = [];
+  let markerTargetPlanId = Number.isFinite(currentPlanId) ? currentPlanId : null;
+  let markerTargetPoints = []; // [{id,name,has_panorama,panorama_image}]
+  let currentEntryAzimuth = null; // null = auto, number = explicit angle
+
+  function setTargetPointsSelectLoading() {
+    if (!targetPointSelect) return;
+    targetPointSelect.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Загрузка точек...';
+    targetPointSelect.appendChild(opt);
+  }
+
+  async function ensureMarkerTargetPlansLoaded() {
+    if (!targetPlanSelect) return;
+    if (markerTargetPlans.length) return;
+
+    // If current plan is not in a facility — only current plan is available.
+    if (!currentFacilityId || !Number.isFinite(Number(currentFacilityId))) {
+      if (Number.isFinite(currentPlanId)) {
+        markerTargetPlans = [{
+          id: currentPlanId,
+          title: state.plan?.title || `План ${currentPlanId}`,
+          floor: null,
+          image: state.plan?.imageUrl || null
+        }];
+      } else {
+        markerTargetPlans = [];
+      }
+      return;
+    }
+
+    try {
+      const detail = await fetchFacilityDetail(currentFacilityId);
+      const plans = Array.isArray(detail?.plans) ? detail.plans : [];
+      markerTargetPlans = plans.slice().sort((a, b) => {
+        const fa = Number(a.floor);
+        const fb = Number(b.floor);
+        if (Number.isFinite(fa) && Number.isFinite(fb) && fa !== fb) return fa - fb;
+        return String(a.title || '').localeCompare(String(b.title || ''), 'ru');
+      });
+    } catch (err) {
+      console.warn(err);
+      // Fallback: allow only current plan
+      markerTargetPlans = Number.isFinite(currentPlanId)
+        ? [{ id: currentPlanId, title: state.plan?.title || `План ${currentPlanId}`, floor: null, image: state.plan?.imageUrl || null }]
+        : [];
+    }
+  }
+
+  function renderTargetPlanSelect(selectedPlanId) {
+    if (!targetPlanSelect) return;
+    targetPlanSelect.innerHTML = '';
+    if (!markerTargetPlans.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'План недоступен';
+      targetPlanSelect.appendChild(opt);
+      targetPlanSelect.disabled = true;
+      return;
+    }
+    targetPlanSelect.disabled = markerTargetPlans.length <= 1;
+    markerTargetPlans.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = String(p.id);
+      const floor = (p.floor === null || typeof p.floor === 'undefined') ? '' : `этаж ${p.floor} — `;
+      opt.textContent = `${floor}${p.title || `План ${p.id}`} (ID: ${p.id})`;
+      if (sameEntityId(p.id, selectedPlanId)) opt.selected = true;
+      targetPlanSelect.appendChild(opt);
+    });
+  }
+
+  async function loadTargetPointsForPlan(planId) {
+    const pid = parseInt(String(planId), 10);
+    if (!Number.isFinite(pid)) {
+      markerTargetPoints = [];
+      markerTargetPlanId = null;
+      return;
+    }
+    markerTargetPlanId = pid;
+    setTargetPointsSelectLoading();
+    try {
+      const pts = await fetchMapPointsForPlan(pid);
+      markerTargetPoints = (pts || []).map(pt => ({
+        id: pt.id,
+        name: pt.name,
+        has_panorama: !!pt.panorama,
+        panorama_image: pt.panorama?.image || null,
+      }));
+    } catch (err) {
+      console.warn(err);
+      markerTargetPoints = [];
+    }
+  }
+
+  async function setTargetPlan(planId, selectedPointId = null) {
+    await ensureMarkerTargetPlansLoaded();
+    const effectivePlanId = Number.isFinite(parseInt(String(planId), 10))
+      ? parseInt(String(planId), 10)
+      : (markerTargetPlans[0]?.id ?? null);
+
+    renderTargetPlanSelect(effectivePlanId);
+    await loadTargetPointsForPlan(effectivePlanId);
+    populateTargetPointsSelect(selectedPointId);
+  }
+
   if(!point.panorama.markers || !point.panorama.markers.length){
     try{
       const res = await fetch(`/api/panorama_markers/?panorama=${point.panorama.id}`);
@@ -936,7 +1219,7 @@ async function openPanorama(point){
   function populateTargetPointsSelect(selectedId = null) {
     const query = (targetSearch.value || '').trim().toLowerCase();
     const currentSelection = Number.isFinite(selectedId) ? selectedId : parseInt(targetPointSelect.value, 10);
-    const points = state.points.filter(p => {
+    const points = (markerTargetPoints || []).filter(p => {
       if (!query) return true;
       return (p.name || '').toLowerCase().includes(query);
     });
@@ -950,10 +1233,12 @@ async function openPanorama(point){
     points.forEach(p => {
       const option = document.createElement('option');
       option.value = String(p.id);
-      option.textContent = p.name ? `${p.name} (ID: ${p.id})` : `Точка ${p.id}`;
+      const warn = p.has_panorama ? '' : ' ⚠️ нет панорамы';
+      option.textContent = p.name ? `${p.name}${warn} (ID: ${p.id})` : `Точка ${p.id}${warn}`;
       if (p.id === currentSelection) option.selected = true;
       targetPointSelect.appendChild(option);
     });
+    refreshEntryAzimuthPicker();
   }
 
   function populateInfoToursSelect(selectedTours = []) {
@@ -991,7 +1276,8 @@ async function openPanorama(point){
     markerType.value = 'transition';
     markerLabel.value = '';
     targetSearch.value = '';
-    populateTargetPointsSelect(null);
+    resetEntryAzimuth();
+    void setTargetPlan(currentPlanId, null);
 
     infoLabel.value = '';
     infoText.value = '';
@@ -1016,7 +1302,13 @@ async function openPanorama(point){
     markerType.value = marker.type || 'transition';
     markerLabel.value = marker.label || '';
     targetSearch.value = '';
-    populateTargetPointsSelect(marker.target_point || null);
+    const planForTarget = marker.target_plan_id || currentPlanId;
+    void setTargetPlan(planForTarget, marker.target_point || null);
+
+    // Угол входа
+    const hasEntry = marker.entry_azimuth != null && Number.isFinite(Number(marker.entry_azimuth));
+    if (hasEntry) setEntryAzimuth(Number(marker.entry_azimuth));
+    else resetEntryAzimuth();
 
     infoLabel.value = marker.label || '';
     infoText.value = marker.text || '';
@@ -1031,15 +1323,21 @@ async function openPanorama(point){
     }
     if (type === 'transition') {
       const targetId = parseInt(targetPointSelect.value, 10);
-      if (!targetId || !state.points.find(p => p.id === targetId)) {
+      if (!targetId || !markerTargetPoints.find(p => p.id === targetId)) {
         throw new Error('Выберите корректную целевую точку');
+      }
+      // Client-side guard: selected point must belong to selected target plan.
+      const selectedPlanId = parseInt(String(targetPlanSelect?.value || ''), 10);
+      if (Number.isFinite(selectedPlanId) && Number.isFinite(markerTargetPlanId) && selectedPlanId !== markerTargetPlanId) {
+        throw new Error('Целевая точка не соответствует выбранному плану. Обновите список и выберите заново.');
       }
       return {
         type: 'transition',
         target_point: targetId,
         label: (markerLabel.value || '').trim(),
         text: '',
-        tours: []
+        tours: [],
+        entry_azimuth: currentEntryAzimuth
       };
     }
 
@@ -1058,7 +1356,71 @@ async function openPanorama(point){
   targetSearch.oninput = () => {
     populateTargetPointsSelect();
   };
+  targetPlanSelect && (targetPlanSelect.onchange = () => {
+    const pid = parseInt(targetPlanSelect.value, 10);
+    void setTargetPlan(pid, null);
+  });
   markerCancelBtn.onclick = closeMarkerModal;
+
+  /** Установить явный угол входа. */
+  function setEntryAzimuth(az) {
+    currentEntryAzimuth = az;
+    const azNorm = (((Number(az) % 360) + 360) % 360);
+    if (entryAzimuthCursor) {
+      entryAzimuthCursor.style.left = `${(azNorm / 360) * 100}%`;
+      entryAzimuthCursor.classList.remove('hidden');
+    }
+    if (entryAzimuthValue) entryAzimuthValue.textContent = `${azNorm}°`;
+    if (entryAzimuthReset) entryAzimuthReset.style.display = '';
+    if (entryAzimuthHint) entryAzimuthHint.textContent = 'Задан явно — будет использован при переходе';
+    // Sync legacy hidden input (kept for any remaining reads)
+    if (entryAzimuthInput) entryAzimuthInput.value = String(azNorm);
+    if (entryAzimuthAuto) entryAzimuthAuto.checked = false;
+  }
+
+  /** Сбросить угол входа в режим авто. */
+  function resetEntryAzimuth() {
+    currentEntryAzimuth = null;
+    if (entryAzimuthCursor) entryAzimuthCursor.classList.add('hidden');
+    if (entryAzimuthValue) entryAzimuthValue.textContent = 'авто';
+    if (entryAzimuthReset) entryAzimuthReset.style.display = 'none';
+    if (entryAzimuthHint) entryAzimuthHint.textContent = 'Авто: определяется по обратному маркеру';
+    if (entryAzimuthInput) entryAzimuthInput.value = '';
+    if (entryAzimuthAuto) entryAzimuthAuto.checked = true;
+  }
+
+  /** Обновить мини-панораму пикера при смене целевой точки. */
+  function refreshEntryAzimuthPicker() {
+    const selectedId = parseInt(targetPointSelect?.value || '', 10);
+    const pt = markerTargetPoints.find(p => p.id === selectedId);
+    const url = pt?.panorama_image || null;
+    if (url) {
+      if (entryAzimuthPanoImg) entryAzimuthPanoImg.src = url;
+      entryAzimuthPickerWrap?.classList.remove('hidden');
+      entryAzimuthNoPanoHint?.classList.add('hidden');
+    } else {
+      entryAzimuthPickerWrap?.classList.add('hidden');
+      if (pt) {
+        entryAzimuthNoPanoHint?.classList.remove('hidden');
+      } else {
+        entryAzimuthNoPanoHint?.classList.add('hidden');
+      }
+    }
+  }
+
+  // Клик по полосе панорамы → установить угол
+  entryAzimuthPicker?.addEventListener('click', (e) => {
+    const rect = entryAzimuthPicker.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const az = Math.round((x / rect.width) * 360) % 360;
+    setEntryAzimuth(az);
+  });
+
+  // Кнопка «Сбросить»
+  entryAzimuthReset?.addEventListener('click', () => resetEntryAzimuth());
+
+  // Смена целевой точки → обновить пикер
+  targetPointSelect?.addEventListener('change', () => refreshEntryAzimuthPicker());
 
   markerSaveBtn.onclick = async () => {
     if (!markerDraft) return;
@@ -1168,7 +1530,98 @@ function setupSidebarListDelegation() {
 
 setupSidebarListDelegation();
 
+// Facility handlers
+addFacilityBtn?.addEventListener('click', async () => {
+  const title = (prompt('Название объекта', '') || '').trim();
+  if (!title) return;
+  try {
+    const created = await createFacility(title);
+    facilityState.list.push(created);
+    facilityState.list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ru'));
+    renderFacilities();
+  } catch (err) {
+    alert(err.message || 'Не удалось создать объект');
+  }
+});
+
+facilityAssignBtn?.addEventListener('click', async () => {
+  if (!state.plan?.id) return alert('Сначала выберите/создайте план');
+  const raw = facilitySelect?.value ?? '';
+  const facilityId = raw ? parseInt(raw, 10) : null;
+  if (raw && !Number.isFinite(facilityId)) return alert('Некорректный объект');
+  try {
+    const updated = await patchPlanFacility(state.plan.id, facilityId);
+    state.plan.facility_id = updated.facility_id ?? null;
+    saveState();
+    await refreshFacilitiesUI();
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось назначить объект');
+  }
+});
+
+facilitiesList?.addEventListener('click', async (e) => {
+  const btn = clickEventTargetElement(e)?.closest('button[data-facility-action]');
+  if (!btn || !facilitiesList.contains(btn)) return;
+  const id = parseInt(btn.dataset.facilityId, 10);
+  if (!Number.isFinite(id)) return;
+  const action = btn.dataset.facilityAction;
+
+  if (action === 'select') {
+    try {
+      facilityState.selectedId = id;
+      const detail = await fetchFacilityDetail(id);
+      facilityState.selectedPlans = Array.isArray(detail.plans) ? detail.plans : [];
+      renderFacilities();
+    } catch (err) {
+      alert(err.message || 'Не удалось загрузить планы объекта');
+    }
+    return;
+  }
+
+  if (action === 'rename') {
+    const facility = facilityState.list.find(f => sameEntityId(f.id, id));
+    const currentTitle = facility?.title || '';
+    const newTitle = (prompt('Новое название объекта', currentTitle) || '').trim();
+    if (!newTitle || newTitle === currentTitle) return;
+    try {
+      const updated = await updateFacility(id, { title: newTitle });
+      if (facility) Object.assign(facility, updated);
+      if (sameEntityId(facilityState.selectedId, id)) {
+        // keep selection; plans remain as-is
+      }
+      renderFacilities();
+    } catch (err) {
+      alert(err.message || 'Не удалось переименовать объект');
+    }
+    return;
+  }
+
+  if (action === 'delete') {
+    const facility = facilityState.list.find(f => sameEntityId(f.id, id));
+    const title = facility?.title || `ID ${id}`;
+    if (!confirm(`Удалить объект «${title}»?`)) return;
+    try {
+      await deleteFacilityRequest(id);
+      facilityState.list = facilityState.list.filter(f => !sameEntityId(f.id, id));
+      if (sameEntityId(facilityState.selectedId, id)) {
+        facilityState.selectedId = null;
+        facilityState.selectedPlans = [];
+      }
+      // If current plan had this facility, refresh it from server to avoid stale UI.
+      if (state.plan?.id && sameEntityId(state.plan.facility_id, id)) {
+        await loadPlanFromServer(state.plan.id);
+        return;
+      }
+      renderFacilities();
+    } catch (err) {
+      alert(err.message || 'Не удалось удалить объект');
+    }
+  }
+});
+
 (async function init() {
   const handled = await initFromQuery();
   if (!handled) loadState();
+  await refreshFacilitiesUI().catch(err => console.warn(err));
 })();

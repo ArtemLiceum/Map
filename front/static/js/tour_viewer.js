@@ -4,6 +4,15 @@
   const IS_STAFF = !!window.IS_STAFF;
   if (!PLAN_ID) return;
 
+  const qs = new URLSearchParams(window.location.search || '');
+  const FACILITY_ID_RAW = qs.get('facility');
+  const START_POINT_RAW = qs.get('point');
+  const ENTRY_AZIMUTH_RAW = qs.get('entry_azimuth');
+  const FACILITY_ID = FACILITY_ID_RAW != null ? Number.parseInt(FACILITY_ID_RAW, 10) : NaN;
+  const START_POINT_ID = START_POINT_RAW != null ? Number.parseInt(START_POINT_RAW, 10) : NaN;
+  const START_ENTRY_AZIMUTH = ENTRY_AZIMUTH_RAW != null ? Number.parseFloat(ENTRY_AZIMUTH_RAW) : NaN;
+  const IS_FACILITY_MODE = Number.isFinite(FACILITY_ID);
+
   const panoramaEl = document.getElementById('tvPanoramaImage');
   const markersLayer = document.getElementById('tvNavMarkers');
   const fadeEl = document.getElementById('tvFade');
@@ -70,7 +79,11 @@
     selectedTourId: null,
     minimapCollapsed: false,
     minimapZoom: 1,
-    /** @type {null | { endPointId: number, path: number[], steps: {from_point_id:number,to_point_id:number,marker_id:number}[], deviation: 'none'|'blocked' }} */
+    facilityId: IS_FACILITY_MODE ? FACILITY_ID : null,
+    startPointParam: Number.isFinite(START_POINT_ID) ? START_POINT_ID : null,
+    /** @type {null | { id: number, plans: {id:number,title:string,floor:number,image:string}[], points: {id:number,name:string,plan_id:number,plan_title:string,plan_floor:number}[] }} */
+    facility: null,
+    /** @type {null | { endPointId: number, path: number[], steps: {from_point_id:number,to_point_id:number,marker_id:number}[], pointPlans?: Record<string, number>, deviation: 'none'|'blocked' }} */
     route: null,
     /** @type {null | { fromId: number, markerId: number, toId: number }} */
     pendingRouteNav: null
@@ -80,7 +93,65 @@
   let routeToastTimer = null;
 
   function routeStorageKey() {
-    return `tourRoute:${PLAN_ID}`;
+    return state.facilityId ? `facilityRoute:${state.facilityId}` : `tourRoute:${PLAN_ID}`;
+  }
+
+  function pendingRouteNavStorageKey() {
+    return state.facilityId ? `facilityPendingRouteNav:${state.facilityId}` : null;
+  }
+
+  function savePendingRouteNavToStorage(pending) {
+    const key = pendingRouteNavStorageKey();
+    if (!key || !pending) return;
+    try {
+      sessionStorage.setItem(
+        key,
+        JSON.stringify({
+          fromId: Number(pending.fromId),
+          markerId: Number(pending.markerId),
+          toId: Number(pending.toId),
+          entryAzimuth: (pending.entryAzimuth != null && Number.isFinite(Number(pending.entryAzimuth)))
+            ? Number(pending.entryAzimuth) : null
+        })
+      );
+    } catch (_) {
+      /* ignore quota */
+    }
+  }
+
+  function tryRestorePendingRouteNavFromStorage() {
+    const key = pendingRouteNavStorageKey();
+    if (!key) return null;
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      const fromId = Number(saved.fromId);
+      const markerId = Number(saved.markerId);
+      const toId = Number(saved.toId);
+      if (!Number.isFinite(fromId) || !Number.isFinite(markerId) || !Number.isFinite(toId)) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      const entryAzimuth = (saved.entryAzimuth != null && Number.isFinite(Number(saved.entryAzimuth)))
+        ? Number(saved.entryAzimuth) : null;
+      return { fromId, markerId, toId, entryAzimuth };
+    } catch (_) {
+      try {
+        sessionStorage.removeItem(key);
+      } catch (__) {}
+      return null;
+    }
+  }
+
+  function clearPendingRouteNavStorage() {
+    const key = pendingRouteNavStorageKey();
+    if (!key) return;
+    try {
+      sessionStorage.removeItem(key);
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function hideRecalcHint() {
@@ -117,14 +188,23 @@
     const r = state.route;
     if (!r || r.deviation === 'blocked') return;
     try {
-      sessionStorage.setItem(
-        routeStorageKey(),
-        JSON.stringify({
-          endPointId: r.endPointId,
-          path: r.path,
-          steps: r.steps
-        })
-      );
+      const base = {
+        endPointId: r.endPointId,
+        path: r.path,
+        steps: r.steps
+      };
+      if (state.facilityId) {
+        sessionStorage.setItem(
+          routeStorageKey(),
+          JSON.stringify({
+            ...base,
+            facilityId: state.facilityId,
+            point_plans: r.pointPlans || {}
+          })
+        );
+      } else {
+        sessionStorage.setItem(routeStorageKey(), JSON.stringify(base));
+      }
     } catch (_) {
       /* ignore quota */
     }
@@ -135,19 +215,33 @@
       const raw = sessionStorage.getItem(routeStorageKey());
       if (!raw) return;
       const saved = JSON.parse(raw);
-      const ids = new Set(state.points.map(p => p.id));
-      if (!saved.path || !Array.isArray(saved.path) || !saved.path.every(id => ids.has(id))) {
+      if (!saved.path || !Array.isArray(saved.path)) {
         sessionStorage.removeItem(routeStorageKey());
         return;
       }
+
+      // In facility mode, path can span multiple plans — do not validate against current plan points.
+      if (!state.facilityId) {
+        const ids = new Set(state.points.map(p => p.id));
+        if (!saved.path.every(id => ids.has(id))) {
+          sessionStorage.removeItem(routeStorageKey());
+          return;
+        }
+      } else {
+        if (Number(saved.facilityId) !== Number(state.facilityId)) {
+          sessionStorage.removeItem(routeStorageKey());
+          return;
+        }
+      }
       state.route = {
         endPointId: Number(saved.endPointId),
-        path: saved.path.map(Number),
+        path: saved.path.map(Number).filter(Number.isFinite),
         steps: (saved.steps || []).map(s => ({
           from_point_id: Number(s.from_point_id),
           to_point_id: Number(s.to_point_id),
           marker_id: Number(s.marker_id)
         })),
+        pointPlans: state.facilityId ? (saved.point_plans || saved.pointPlans || {}) : undefined,
         deviation: 'none'
       };
     } catch (_) {
@@ -183,7 +277,25 @@
       return;
     }
     const pairs = [];
-    for (const id of r.path) {
+    const pointPlans = r.pointPlans || null;
+    let idsToDraw = r.path;
+    if (state.facilityId && pointPlans && state.activePointId != null) {
+      const i = idsToDraw.indexOf(state.activePointId);
+      if (i === -1) {
+        svg.innerHTML = '';
+        return;
+      }
+      const currentPlanId = PLAN_ID;
+      const seg = [];
+      for (let j = i; j < idsToDraw.length; j++) {
+        const pid = idsToDraw[j];
+        const planId = pointPlans[String(pid)];
+        if (planId == null || Number(planId) !== Number(currentPlanId)) break;
+        seg.push(pid);
+      }
+      idsToDraw = seg;
+    }
+    for (const id of idsToDraw) {
       const p = state.points.find(x => x.id === id);
       if (p) pairs.push(`${Number(p.x)},${Number(p.y)}`);
     }
@@ -211,25 +323,33 @@
     const prevE = tvRouteEnd.value;
     tvRouteStart.innerHTML = '';
     tvRouteEnd.innerHTML = '';
-    state.points.forEach(p => {
+    const list = state.facilityId && state.facility?.points?.length
+      ? state.facility.points
+      : state.points;
+    list.forEach(p => {
       const o1 = document.createElement('option');
       o1.value = String(p.id);
-      o1.textContent = p.name || `Точка ${p.id}`;
+      if (state.facilityId) {
+        const floor = p.plan_floor != null ? `этаж ${p.plan_floor}` : 'этаж ?';
+        o1.textContent = `${p.name || `Точка ${p.id}`} — ${p.plan_title || 'План'} (${floor})`;
+      } else {
+        o1.textContent = p.name || `Точка ${p.id}`;
+      }
       tvRouteStart.appendChild(o1.cloneNode(true));
       tvRouteEnd.appendChild(o1);
     });
-    const ids = new Set(state.points.map(p => p.id));
+    const ids = new Set(list.map(p => p.id));
     const activeId = state.activePointId;
     if (activeId != null && ids.has(activeId)) {
       tvRouteStart.value = String(activeId);
-    } else if (state.points.length) {
-      tvRouteStart.value = String(state.points[0].id);
+    } else if (list.length) {
+      tvRouteStart.value = String(list[0].id);
     }
     if (prevE && [...tvRouteEnd.options].some(o => o.value === prevE)) {
       tvRouteEnd.value = prevE;
-    } else if (state.points.length > 1) {
+    } else if (list.length > 1) {
       const startNum = Number(tvRouteStart.value);
-      const other = state.points.find(p => p.id !== startNum) || state.points[0];
+      const other = list.find(p => p.id !== startNum) || list[0];
       tvRouteEnd.value = String(other.id);
     }
   }
@@ -247,6 +367,7 @@
       setRouteDeviation('Вы сошли с маршрута.');
       return;
     }
+    // In facility mode, minimap clicks within the same plan are allowed only as "next" step too.
     if (i === r.path.length - 1) {
       if (targetId !== state.activePointId) {
         setRouteDeviation('Вы сошли с маршрута.');
@@ -261,6 +382,7 @@
   function processPendingRouteNav() {
     const pending = state.pendingRouteNav;
     state.pendingRouteNav = null;
+    clearPendingRouteNavStorage();
     if (!pending) return;
     if (!state.route || state.route.deviation === 'blocked') return;
     const r = state.route;
@@ -339,6 +461,7 @@
       endPointId: endId,
       path: data.path,
       steps: data.steps || [],
+      pointPlans: state.facilityId ? (data.point_plans || {}) : undefined,
       deviation: 'none'
     };
     saveRouteToStorage();
@@ -353,7 +476,9 @@
   async function fetchAndApplyRoute(startId, endId) {
     setRouteStatus('');
     hideRecalcHint();
-    const url = `/api/evac_plans/${PLAN_ID}/route/?start_point=${encodeURIComponent(startId)}&end_point=${encodeURIComponent(endId)}`;
+    const url = state.facilityId
+      ? `/api/facilities/${state.facilityId}/route/?start_point=${encodeURIComponent(startId)}&end_point=${encodeURIComponent(endId)}`
+      : `/api/evac_plans/${PLAN_ID}/route/?start_point=${encodeURIComponent(startId)}&end_point=${encodeURIComponent(endId)}`;
     const res = await fetch(url);
     if (!res.ok) {
       let detail = 'Ошибка запроса маршрута.';
@@ -473,8 +598,21 @@
     tryRestoreRouteFromStorage();
     updateRoutePolyline();
     highlightMinimap(state.activePointId);
+    if (!state.facilityId && plan?.facility_id != null) {
+      const fid = Number(plan.facility_id);
+      if (Number.isFinite(fid)) {
+        showRouteToast('Этот тур относится к объекту. Для межэтажных переходов откройте с ?facility=' + fid);
+      }
+    }
     if (state.activePointId) {
-      await loadScene(state.activePointId);
+      // Использовать угол входа из URL (cross-plan reload) если точка совпадает с запрошенной
+      const initialEntry =
+        Number.isFinite(START_ENTRY_AZIMUTH) &&
+        Number.isFinite(START_POINT_ID) &&
+        state.activePointId === START_POINT_ID
+          ? START_ENTRY_AZIMUTH
+          : (state.pendingRouteNav?.entryAzimuth ?? null);
+      await loadScene(state.activePointId, initialEntry);
     } else {
       setLoader('Нет точек с панорамами', true);
     }
@@ -581,9 +719,69 @@
     return null;
   }
 
+  async function resolveTargetPlanIdByPointId(pointId) {
+    const id = Number(pointId);
+    if (!Number.isFinite(id)) return null;
+    try {
+      const res = await fetch(`/api/map_points/${encodeURIComponent(id)}/`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const planId = data?.plan != null ? Number(data.plan) : null;
+      return Number.isFinite(planId) ? planId : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function pickInitialPointId(points) {
+    const requested = state.startPointParam;
+    if (requested != null) {
+      const exists = points.find(p => Number(p.id) === Number(requested));
+      if (exists) return exists.id;
+    }
     const withPano = points.find(p => p.panorama && p.panorama.image);
     return withPano ? withPano.id : (points[0]?.id ?? null);
+  }
+
+  async function loadFacilityContext() {
+    if (!state.facilityId) return;
+    try {
+      const res = await fetch(`/api/facilities/${state.facilityId}/`);
+      if (!res.ok) throw new Error('Не удалось загрузить facility');
+      const detail = await res.json();
+      const plans = Array.isArray(detail?.plans) ? detail.plans : [];
+      // Load points for each plan to populate route selects across facility.
+      const allPoints = [];
+      for (const plan of plans) {
+        const pid = Number(plan.id);
+        if (!Number.isFinite(pid)) continue;
+        try {
+          const pr = await fetch(`/api/map_points/?plan=${encodeURIComponent(pid)}`);
+          if (!pr.ok) continue;
+          const pts = await pr.json();
+          if (!Array.isArray(pts)) continue;
+          pts.forEach(pt => {
+            allPoints.push({
+              id: Number(pt.id),
+              name: pt.name || `Точка ${pt.id}`,
+              plan_id: pid,
+              plan_title: plan.title || `План ${pid}`,
+              plan_floor: Number.isFinite(Number(plan.floor)) ? Number(plan.floor) : null
+            });
+          });
+        } catch (_) {
+          /* ignore per-plan errors */
+        }
+      }
+      state.facility = {
+        id: state.facilityId,
+        plans,
+        points: allPoints.filter(p => Number.isFinite(p.id))
+      };
+    } catch (err) {
+      console.warn(err);
+      state.facility = null;
+    }
   }
 
   function loadImage(url) {
@@ -595,7 +793,7 @@
     });
   }
 
-  async function loadScene(pointId) {
+  async function loadScene(pointId, entryAzimuth = null) {
     const point = state.points.find(p => p.id === pointId);
     if (!point) {
       state.pendingRouteNav = null;
@@ -611,12 +809,24 @@
     setLoader('Загрузка панорамы...', true);
     const img = await loadImage(pano.image);
 
+    const prevActiveId = state.activePointId;
     state.activePointId = pointId;
     state.panoWidth = img.naturalWidth || img.width;
     state.panoHeight = img.naturalHeight || img.height;
     recalcScaledTile();
     state.panoUrl = pano.image;
-    state.offsetPx = 0;
+
+    // Определить угол входа: явный → обратный маркер → 0
+    let landingAzimuth = (entryAzimuth != null && Number.isFinite(Number(entryAzimuth)))
+      ? Number(entryAzimuth)
+      : null;
+    if (landingAzimuth == null) {
+      landingAzimuth = findReverseAzimuth(pointId, prevActiveId);
+    }
+    // Если задан угол — центрировать вьюпорт на нём (offsetPx = позиция пикселя - полвьюпорта)
+    state.offsetPx = landingAzimuth != null
+      ? azimuthToPx(landingAzimuth) - (state.viewportW / 2)
+      : 0;
     state.velocity = 0;
 
     panoramaEl.style.backgroundImage = `url(${pano.image})`;
@@ -626,6 +836,13 @@
 
     applyRouteNavHighlights();
     processPendingRouteNav();
+    // If we restored a facility route but current point is not on it — mark deviation.
+    if (state.route && state.route.deviation !== 'blocked') {
+      const i = state.route.path.indexOf(state.activePointId);
+      if (i === -1) {
+        setRouteDeviation('Вы сошли с маршрута.');
+      }
+    }
     checkRouteArrival();
 
     highlightMinimap(pointId);
@@ -636,9 +853,19 @@
 
   function buildNavMarkers(markers) {
     markersLayer.innerHTML = '';
-    const effectiveMarkers = state.selectedTourId
+    let effectiveMarkers = state.selectedTourId
       ? markers
       : markers.filter(m => m.type !== 'info');
+
+    // V3: Without facility mode, hide cross-plan transitions.
+    if (!state.facilityId) {
+      effectiveMarkers = effectiveMarkers.filter(m => {
+        if (m.type !== 'transition') return true;
+        const targetPlanId = m.target_plan_id != null ? Number(m.target_plan_id) : null;
+        if (!Number.isFinite(targetPlanId)) return true;
+        return Number(targetPlanId) === Number(PLAN_ID);
+      });
+    }
 
     state.markers = effectiveMarkers.map(m => {
       const el = document.createElement('button');
@@ -677,6 +904,25 @@
   function azimuthToPx(azimuth) {
     if (!state.tileWidth) return 0;
     return (azimuth % 360) * state.tileWidth / 360;
+  }
+
+  /**
+   * Ищет обратный маркер: в целевой точке toPointId находит переходной маркер,
+   * ведущий обратно в fromPointId. Возвращает azimuth обратного маркера + 180°
+   * (т.е. направление "спиной к двери" — лицом внутрь комнаты).
+   * @param {number} toPointId
+   * @param {number|null} fromPointId
+   * @returns {number|null}
+   */
+  function findReverseAzimuth(toPointId, fromPointId) {
+    if (fromPointId == null) return null;
+    const target = state.points.find(p => p.id === toPointId);
+    if (!target?.panorama?.markers?.length) return null;
+    const rev = target.panorama.markers.find(
+      m => m.type === 'transition' && Number(m.target_point) === fromPointId
+    );
+    if (!rev) return null;
+    return (rev.azimuth + 180) % 360;
   }
 
   function clamp(val, min, max) {
@@ -796,12 +1042,12 @@
     }
   }
 
-  function switchToPoint(pointId) {
+  function switchToPoint(pointId, entryAzimuth = null) {
     if (pointId === state.activePointId) {
       state.pendingRouteNav = null;
       return;
     }
-    loadScene(pointId).catch(err => {
+    loadScene(pointId, entryAzimuth).catch(err => {
       state.pendingRouteNav = null;
       console.error(err);
       setLoader(err.message || 'Ошибка загрузки', true);
@@ -928,14 +1174,64 @@
       }
       const targetId = Number(marker.dataset.targetPoint);
       if (targetId) {
-        if (markerData) {
-          state.pendingRouteNav = {
-            fromId: state.activePointId,
-            markerId: markerData.id,
-            toId: targetId
-          };
+        const entryAzimuth =
+          markerData?.entry_azimuth != null && Number.isFinite(Number(markerData.entry_azimuth))
+            ? Number(markerData.entry_azimuth)
+            : null;
+
+        const pending =
+          markerData
+            ? {
+                fromId: state.activePointId,
+                markerId: markerData.id,
+                toId: targetId,
+                entryAzimuth
+              }
+            : null;
+
+        if (pending) {
+          state.pendingRouteNav = pending;
         }
-        switchToPoint(targetId);
+
+        let targetPlanId =
+          markerData && markerData.target_plan_id != null
+            ? Number(markerData.target_plan_id)
+            : null;
+
+        // V4: In facility mode, cross-plan transition performs full reload with ?facility&point.
+        if (state.facilityId) {
+          const eaParam = entryAzimuth != null
+            ? `&entry_azimuth=${encodeURIComponent(entryAzimuth)}` : '';
+          // If serializer did not provide target_plan_id, resolve from point.
+          if (!Number.isFinite(targetPlanId)) {
+            resolveTargetPlanIdByPointId(targetId).then((resolved) => {
+              if (!Number.isFinite(resolved)) {
+                showRouteToast('Не удалось определить план целевой точки.');
+                return;
+              }
+              if (Number(resolved) !== Number(PLAN_ID)) {
+                if (pending) savePendingRouteNavToStorage(pending);
+                window.location.href = `/tour/${encodeURIComponent(resolved)}/?facility=${encodeURIComponent(state.facilityId)}&point=${encodeURIComponent(targetId)}${eaParam}`;
+                return;
+              }
+              switchToPoint(targetId, entryAzimuth);
+            });
+            return;
+          }
+          if (Number(targetPlanId) !== Number(PLAN_ID)) {
+            if (pending) savePendingRouteNavToStorage(pending);
+            window.location.href = `/tour/${encodeURIComponent(targetPlanId)}/?facility=${encodeURIComponent(state.facilityId)}&point=${encodeURIComponent(targetId)}${eaParam}`;
+            return;
+          }
+        } else {
+          // Without facility mode, cross-plan transitions are hidden, but if one slips through — block.
+          if (Number.isFinite(targetPlanId) && Number(targetPlanId) !== Number(PLAN_ID)) {
+            showRouteToast('Межэтажный переход доступен только в режиме объекта (?facility=...).');
+            return;
+          }
+        }
+
+        switchToPoint(targetId, entryAzimuth);
       }
     });
 
@@ -1012,6 +1308,11 @@
   function init() {
     initEvents();
     const load = async () => {
+      // Restore pending cross-plan step before loading plan.
+      if (state.facilityId) {
+        state.pendingRouteNav = tryRestorePendingRouteNavFromStorage();
+        await loadFacilityContext();
+      }
       if (IS_AUTH && tourSelect) {
         await loadTours();
       }

@@ -83,7 +83,7 @@
         </button>
     </div>
 
-    <button class="tv-back" id="tvBack" type="button" onclick="history.back()">← Назад</button>
+    <button class="tv-back" id="tvBack" type="button" onclick="window.location.href='{% url 'main' %}'">← Назад</button>
 
     <div id="tvRouteDeviation" class="tv-route-deviation hidden" role="alert">
         <p id="tvRouteDeviationText" class="tv-route-deviation-text"></p>
@@ -131,6 +131,6 @@
     window.IS_AUTH = {{ is_auth|yesno:"true,false" }};
     window.IS_STAFF = {{ is_staff|yesno:"true,false" }};
 </script>
-<script src="{% static 'js/tour_viewer.js' %}"></script>
+<script src="{% static 'js/tour_viewer.js' %}?v=2026-05-26"></script>
 </body>
 </html>

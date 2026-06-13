@@ -49,6 +49,24 @@
         </div>
       </div>
       <hr />
+      <h3>Объект</h3>
+      <div class="small">
+        <label>Объект для текущего плана
+          <select id="facilitySelect"></select>
+        </label>
+        <div class="hint admin-section-actions" style="margin-top:6px;">
+          <button id="facilityAssignBtn" class="btn gray" type="button">Применить к плану</button>
+        </div>
+        <hr />
+        <div id="facilitiesList"></div>
+        <div class="hint admin-section-actions" style="margin-top:6px;">
+          <button id="addFacilityBtn" class="btn gray" type="button">Добавить объект</button>
+        </div>
+        <hr />
+        <h4 style="margin:0 0 8px;">Планы в объекте</h4>
+        <div id="facilityPlansList"></div>
+      </div>
+      <hr />
       <h3>Инструкция</h3>
       <ol class="small">
         <li>Введите название и загрузите план.</li>
@@ -105,12 +123,34 @@
       <label>Подпись перехода
         <input id="markerLabel" type="text" placeholder="Например: В коридор" />
       </label>
+      <label>Целевой план
+        <select id="targetPlanSelect"></select>
+      </label>
       <label>Поиск точки
         <input id="targetSearch" type="text" placeholder="Начните вводить название точки" />
       </label>
       <label>Целевая точка
         <select id="targetPointSelect"></select>
       </label>
+      <div id="markerEntryAzimuthGroup">
+        <div class="entry-azimuth-header">
+          <span class="entry-azimuth-label">Угол входа</span>
+          <span id="entryAzimuthValue" class="entry-azimuth-value">авто</span>
+          <button id="entryAzimuthReset" type="button" class="btn gray entry-azimuth-reset" style="display:none">Сбросить</button>
+        </div>
+        <div id="entryAzimuthPickerWrap" class="hidden">
+          <div id="entryAzimuthPicker" class="entry-azimuth-picker">
+            <img id="entryAzimuthPanoImg" alt="Панорама целевой точки" />
+            <div id="entryAzimuthCursor" class="entry-azimuth-cursor hidden"></div>
+          </div>
+          <div class="hint small" style="margin-top:4px">Кликните на панораму — задайте направление камеры при входе</div>
+        </div>
+        <div id="entryAzimuthNoPanoHint" class="hint small hidden">У целевой точки нет панорамы — переход всё равно возможен</div>
+        <div id="entryAzimuthHint" class="hint small">Авто: определяется по обратному маркеру</div>
+        <!-- Скрытые поля — нужны для обратной совместимости JS -->
+        <input type="checkbox" id="entryAzimuthAuto" class="visually-hidden" checked />
+        <input id="entryAzimuthInput" type="number" min="0" max="359" step="1" class="visually-hidden" />
+      </div>
     </div>
 
     <div id="markerInfoFields" class="hidden">
@@ -158,5 +198,5 @@
 
 <!-- Подключаем JS -->
 <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
-<script src="{% static 'js/admin.js' %}"></script>
+<script src="{% static 'js/admin.js' %}?v=2026-05-26"></script>
 {% endblock %}

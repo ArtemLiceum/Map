@@ -29,6 +29,25 @@ def transition_edges_for_plan(plan_id: int) -> list[tuple[int, int, int]]:
     return [(int(a), int(b), int(m)) for a, b, m in rows]
 
 
+def transition_edges_for_facility(facility_id: int) -> list[tuple[int, int, int]]:
+    """
+    Returns list of (from_point_id, to_point_id, marker_id) for the facility-wide
+    transition graph. Edges are included only when both source and target points
+    belong to plans in the same facility.
+    """
+    rows = (
+        PanoramaMarker.objects.filter(
+            type=PanoramaMarker.MarkerType.TRANSITION,
+            target_point_id__isnull=False,
+            panorama__point__plan__facility_id=facility_id,
+            target_point__plan__facility_id=facility_id,
+        )
+        .values_list("panorama__point_id", "target_point_id", "id")
+        .order_by("id")
+    )
+    return [(int(a), int(b), int(m)) for a, b, m in rows]
+
+
 def build_adjacency(
     edges: list[tuple[int, int, int]],
 ) -> dict[int, list[tuple[int, int]]]:
@@ -163,4 +182,47 @@ def route_for_plan(plan_id: int, start_point_id: int, end_point_id: int) -> dict
         "path": path,
         "steps": steps,
         "point_names": point_names,
+    }
+
+
+def route_for_facility(
+    facility_id: int, start_point_id: int, end_point_id: int
+) -> dict[str, Any]:
+    """
+    Validates points belong to the facility, runs BFS on facility-wide transition graph,
+    returns API-shaped dict.
+    """
+    ok_start = MapPoint.objects.filter(plan__facility_id=facility_id, id=start_point_id).exists()
+    ok_end = MapPoint.objects.filter(plan__facility_id=facility_id, id=end_point_id).exists()
+    if not ok_start or not ok_end:
+        return {"error": "start_point и end_point должны существовать и принадлежать Facility."}
+
+    edges = transition_edges_for_facility(facility_id)
+    adj = build_adjacency(edges)
+    path, steps = bfs_shortest_route(adj, start_point_id, end_point_id)
+
+    if not path:
+        return {
+            "found": False,
+            "path": [],
+            "steps": [],
+            "point_names": {},
+            "point_plans": {},
+            "facility_id": facility_id,
+        }
+
+    rows = MapPoint.objects.filter(id__in=path).values_list("id", "name", "plan_id")
+    names: dict[int, str] = {}
+    plans: dict[int, int] = {}
+    for pid, name, plan_id in rows:
+        names[int(pid)] = str(name or "")
+        plans[int(pid)] = int(plan_id)
+
+    return {
+        "found": True,
+        "path": path,
+        "steps": steps,
+        "point_names": {str(pid): names.get(pid, "") for pid in path},
+        "point_plans": {str(pid): plans.get(pid) for pid in path},
+        "facility_id": facility_id,
     }

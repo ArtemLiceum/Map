@@ -1,11 +1,12 @@
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker, Tour, TourInfoMarkerView
+from .models import EvacPlan, Facility, MapPoint, Panorama, PanoramaMarker, Tour, TourInfoMarkerView
 
 
 class PanoramaMarkerSerializer(serializers.ModelSerializer):
     target_point_name = serializers.SerializerMethodField()
+    target_plan_id = serializers.SerializerMethodField()
     tours = serializers.PrimaryKeyRelatedField(
         many=True,
         required=False,
@@ -17,11 +18,15 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
         model = PanoramaMarker
         fields = [
             'id', 'panorama', 'target_point', 'target_point_name',
-            'azimuth', 'pitch', 'label', 'type', 'text', 'tours'
+            'target_plan_id',
+            'azimuth', 'pitch', 'entry_azimuth', 'label', 'type', 'text', 'tours'
         ]
 
     def get_target_point_name(self, obj):
         return obj.target_point.name if obj.target_point else None
+
+    def get_target_plan_id(self, obj):
+        return obj.target_point.plan_id if obj.target_point else None
 
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)
@@ -34,6 +39,25 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"target_point": "Целевая точка обязательна для переходной метки."})
         if marker_type == PanoramaMarker.MarkerType.INFO and target_point is not None:
             raise serializers.ValidationError({"target_point": "Для информационной метки target_point должен отсутствовать."})
+
+        # Межплановый transition разрешён только внутри одной non-null Facility.
+        if marker_type == PanoramaMarker.MarkerType.TRANSITION and target_point is not None and panorama is not None:
+            source_plan_id, source_facility_id = self._get_plan_and_facility_from_panorama(panorama)
+            target_plan_id, target_facility_id = self._get_plan_and_facility_from_point(target_point)
+            if source_plan_id and target_plan_id and source_plan_id != target_plan_id:
+                if (
+                    source_facility_id is None
+                    or target_facility_id is None
+                    or source_facility_id != target_facility_id
+                ):
+                    raise serializers.ValidationError(
+                        {
+                            "target_point": (
+                                "Межплановый переход разрешён только между планами одной Facility "
+                                "(оба facility_id должны быть заполнены и совпадать)."
+                            )
+                        }
+                    )
 
         # Tours allowed only for info markers
         if marker_type == PanoramaMarker.MarkerType.TRANSITION:
@@ -61,6 +85,43 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
             return pano.point.plan_id
         except Panorama.DoesNotExist:
             return None
+
+    def _get_plan_and_facility_from_point(self, point: MapPoint | None) -> tuple[int | None, int | None]:
+        if not point:
+            return None, None
+        plan_id = getattr(point, "plan_id", None)
+        if plan_id is None:
+            return None, None
+        # If plan is already cached, use it without extra query.
+        plan = getattr(point, "plan", None)
+        if isinstance(plan, EvacPlan):
+            return plan_id, getattr(plan, "facility_id", None)
+        facility_id = (
+            EvacPlan.objects.only("id", "facility_id").filter(id=plan_id).values_list("facility_id", flat=True).first()
+        )
+        return plan_id, facility_id
+
+    def _get_plan_and_facility_from_panorama(self, panorama: Panorama | int | None) -> tuple[int | None, int | None]:
+        if not panorama:
+            return None, None
+        if hasattr(panorama, "point"):
+            try:
+                point = panorama.point
+            except MapPoint.DoesNotExist:
+                return None, None
+            return self._get_plan_and_facility_from_point(point)
+
+        pano_id = panorama.pk if hasattr(panorama, "pk") else panorama
+        try:
+            pano = (
+                Panorama.objects.select_related("point__plan")
+                .only("id", "point__plan__id", "point__plan__facility_id")
+                .get(id=pano_id)
+            )
+        except Panorama.DoesNotExist:
+            return None, None
+        point = pano.point
+        return self._get_plan_and_facility_from_point(point)
 
     def create(self, validated_data):
         tours = validated_data.pop('tours', [])
@@ -103,19 +164,27 @@ class MapPointSerializer(serializers.ModelSerializer):
 
 class EvacPlanSerializer(serializers.ModelSerializer):
     points = MapPointSerializer(many=True, read_only=True)
+    facility_id = serializers.IntegerField(read_only=True)
+    facility = serializers.PrimaryKeyRelatedField(
+        queryset=Facility.objects.all(),
+        allow_null=True,
+        required=False,
+        write_only=True,
+    )
 
     class Meta:
         model = EvacPlan
-        fields = ['id', 'title', 'floor', 'image', 'points', 'created_at']
+        fields = ['id', 'title', 'floor', 'image', 'facility', 'facility_id', 'points', 'created_at']
 
 
 class EvacPlanListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views (without nested points)"""
     points_count = serializers.SerializerMethodField()
+    facility_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = EvacPlan
-        fields = ['id', 'title', 'floor', 'image', 'points_count', 'created_at']
+        fields = ['id', 'title', 'floor', 'image', 'facility_id', 'points_count', 'created_at']
 
     def get_points_count(self, obj):
         return obj.points.count()
@@ -254,3 +323,26 @@ class UserSetPasswordSerializer(serializers.Serializer):
         user = self.context.get('user')
         validate_password(pw1, user=user)
         return attrs
+
+
+class FacilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Facility
+        fields = ['id', 'title', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class FacilityPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EvacPlan
+        fields = ['id', 'title', 'floor', 'image']
+        read_only_fields = fields
+
+
+class FacilityDetailSerializer(serializers.ModelSerializer):
+    plans = FacilityPlanSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Facility
+        fields = ['id', 'title', 'created_at', 'plans']
+        read_only_fields = ['id', 'created_at', 'plans']

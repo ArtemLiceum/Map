@@ -6,11 +6,13 @@ from .jwt import EmailTokenObtainPairView
 from .views import (
     EvacPlanViewSet, MapPointViewSet,
     PanoramaViewSet, PanoramaMarkerViewSet, TourViewSet,
+    FacilityViewSet,
     UserViewSet, GroupViewSet, PermissionViewSet,
     RegistrationCodeWordView,
 )
 
 router = DefaultRouter()
+router.register(r'facilities', FacilityViewSet)
 router.register(r'evac_plans', EvacPlanViewSet)
 router.register(r'map_points', MapPointViewSet)
 router.register(r'panoramas', PanoramaViewSet)

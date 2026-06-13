@@ -4,11 +4,35 @@ from django.db import models
 from django.db.models import Q
 
 
+class Facility(models.Model):
+    """Facility: объединение нескольких планов (EvacPlan) в одну сущность."""
+
+    title = models.CharField(max_length=200, verbose_name="Название")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["title"]
+        verbose_name = "Facility"
+        verbose_name_plural = "Facilities"
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class EvacPlan(models.Model):
     """План эвакуации (карта здания / этаж)"""
     title = models.CharField(max_length=200, verbose_name="Название")
     floor = models.IntegerField(default=1, verbose_name="Этаж")
     image = models.ImageField(upload_to='evac_plans/', verbose_name="Изображение плана")
+    facility = models.ForeignKey(
+        Facility,
+        related_name="plans",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Facility",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -80,6 +104,12 @@ class PanoramaMarker(models.Model):
         default=0,
         help_text="Угол по вертикали (-90..90°)",
         verbose_name="Угол наклона"
+    )
+    entry_azimuth = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="Азимут входа",
+        help_text="Направление камеры при входе в целевую точку (0–360°). Пусто — авто.",
     )
     label = models.CharField(
         max_length=100,

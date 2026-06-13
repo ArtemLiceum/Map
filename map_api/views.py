@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from django.db.models import Prefetch
 from .models import (
     EvacPlan,
+    Facility,
     MapPoint,
     Panorama,
     PanoramaMarker,
@@ -22,6 +23,7 @@ from .utils import apply_crop, parse_crop_data
 from .permissions import IsSuperUser
 from .route_graph import (
     route_for_plan,
+    route_for_facility,
     build_adjacency,
     bfs_shortest_route_to_any_end,
     transition_edges_for_plan,
@@ -29,6 +31,8 @@ from .route_graph import (
 from .serializers import (
     EvacPlanSerializer,
     EvacPlanListSerializer,
+    FacilitySerializer,
+    FacilityDetailSerializer,
     MapPointSerializer,
     PanoramaSerializer,
     PanoramaMarkerSerializer,
@@ -119,6 +123,9 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
         floor = self.request.query_params.get('floor')
         if floor:
             qs = qs.filter(floor=floor)
+        facility = self.request.query_params.get('facility')
+        if facility:
+            qs = qs.filter(facility_id=facility)
         marker_qs = self._marker_queryset_for_request()
         qs = qs.prefetch_related(
             'points',
@@ -253,7 +260,17 @@ class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
 
 
 class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
-    queryset = PanoramaMarker.objects.select_related('panorama', 'target_point', 'panorama__point').prefetch_related('tours').all()
+    queryset = (
+        PanoramaMarker.objects.select_related(
+            "panorama",
+            "panorama__point",
+            "panorama__point__plan",
+            "target_point",
+            "target_point__plan",
+        )
+        .prefetch_related("tours")
+        .all()
+    )
     serializer_class = PanoramaMarkerSerializer
 
     def get_queryset(self):
@@ -559,3 +576,56 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(content_type__app_label__icontains=search)
             )
         return qs
+
+
+class FacilityViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
+    queryset = Facility.objects.all()
+
+    def get_permissions(self):
+        if self.action == 'route':
+            return [AllowAny()]
+        return super().get_permissions()
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return FacilityDetailSerializer
+        return FacilitySerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action == 'retrieve':
+            return qs.prefetch_related('plans')
+        return qs
+
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='route',
+        permission_classes=[AllowAny],
+    )
+    def route(self, request, pk=None):
+        """
+        Facility-wide shortest path by transition markers: query start_point, end_point (MapPoint ids).
+        """
+        facility = self.get_object()
+        raw_s = request.query_params.get('start_point')
+        raw_e = request.query_params.get('end_point')
+        if raw_s is None or raw_e is None:
+            return Response(
+                {'detail': 'Укажите параметры start_point и end_point.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            start_id = int(raw_s)
+            end_id = int(raw_e)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'start_point и end_point должны быть целыми числами.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = route_for_facility(int(facility.id), start_id, end_id)
+        err = result.get('error')
+        if err:
+            return Response({'detail': err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)

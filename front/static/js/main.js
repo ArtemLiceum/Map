@@ -62,6 +62,11 @@ function renderTours(tours) {
     card.appendChild(body);
     card.addEventListener('click', () => {
       if (tour.id == null) return;
+      const facilityId = tour.facility_id ?? tour.facilityId ?? null;
+      if (facilityId != null && Number.isFinite(Number(facilityId))) {
+        window.location.href = `/tour/${tour.id}/?facility=${encodeURIComponent(facilityId)}`;
+        return;
+      }
       window.location.href = `/tour/${tour.id}/`;
     });
 
