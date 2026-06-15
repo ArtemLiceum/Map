@@ -14,18 +14,43 @@ services:
       interval: 5s
       timeout: 5s
       retries: 15
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  sonarqube:
+    image: sonarqube:lts-community
+    profiles: ["sonar"]
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
 
   web:
     build: .
     restart: unless-stopped
     env_file:
       - .env
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
     volumes:
-      - .:/app
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
     ports:
       - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
 
 volumes:
   postgres_data:
+  sonarqube_data:
+  sonarqube_extensions:

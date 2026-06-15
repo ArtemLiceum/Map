@@ -68,4 +68,11 @@ echo "Database is ready."
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 
-exec python manage.py runserver 0.0.0.0:8000
+WORKERS="${GUNICORN_WORKERS:-2}"
+exec gunicorn map_core.wsgi:application \
+  --bind 0.0.0.0:8000 \
+  --workers "$WORKERS" \
+  --timeout 120 \
+  --max-requests 1000 \
+  --access-logfile - \
+  --error-logfile -
