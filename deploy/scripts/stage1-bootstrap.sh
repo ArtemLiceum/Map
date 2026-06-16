@@ -19,6 +19,7 @@ fi
 
 VPS_IP="${VPS_IP:?Укажите VPS_IP, например: export VPS_IP='1.2.3.4'}"
 GIT_REPO="${GIT_REPO:-https://github.com/ArtemLiceum/Map.git}"
+GIT_BRANCH="${GIT_BRANCH:-dev}"
 APP_DIR="${APP_DIR:-/opt/map}"
 
 echo "==> 1.1 Установка Docker"
@@ -52,7 +53,7 @@ sudo mkdir -p "$APP_DIR"
 sudo chown "$USER:$USER" "$APP_DIR"
 
 if [[ ! -d "${APP_DIR}/.git" ]]; then
-  git clone "$GIT_REPO" "$APP_DIR"
+  git clone -b "$GIT_BRANCH" "$GIT_REPO" "$APP_DIR"
 else
   echo "Репозиторий уже есть, git pull..."
   git -C "$APP_DIR" pull --ff-only

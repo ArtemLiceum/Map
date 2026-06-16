@@ -30,6 +30,13 @@ from .config import(
     DB_USER,
     DB_SSLMODE,
     DEBUG as CONFIG_DEBUG,
+    USE_S3,
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_STORAGE_BUCKET_NAME,
+    AWS_S3_ENDPOINT_URL,
+    AWS_S3_PUBLIC_ENDPOINT_URL,
+    AWS_S3_REGION_NAME,
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -162,10 +169,39 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+if USE_S3:
+    AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
+    AWS_STORAGE_BUCKET_NAME = AWS_STORAGE_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL = AWS_S3_ENDPOINT_URL
+    AWS_S3_PUBLIC_ENDPOINT_URL = AWS_S3_PUBLIC_ENDPOINT_URL or f"https://{os.environ.get('MAP_PUBLIC_HOST', 'ab46.tech')}/s3"
+    AWS_S3_REGION_NAME = AWS_S3_REGION_NAME
+    AWS_S3_ADDRESSING_STYLE = "path"
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = True
+    AWS_S3_FILE_OVERWRITE = False
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "map_core.storage.MapS3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 LOCALE_PATHS = [
     BASE_DIR / "locale",
