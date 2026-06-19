@@ -2,7 +2,7 @@
 set -eu
 
 # Опционально: поднять localtunnel и добавить URL в CSRF_TRUSTED_ORIGINS
-if [ "${ENABLE_TUNNEL:-0}" = "1" ] || [ "${ENABLE_TUNNEL}" = "true" ]; then
+if [ "${ENABLE_TUNNEL:-0}" = "1" ] || [ "${ENABLE_TUNNEL:-0}" = "true" ]; then
   echo "Starting localtunnel (port 8000)..."
   : > /tmp/lt.log
   ( npx -y localtunnel --port 8000 2>&1 | tee /tmp/lt.log ) &

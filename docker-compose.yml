@@ -79,6 +79,7 @@ services:
     restart: "no"
 
   web:
+    image: ${MAP_WEB_IMAGE:-map-web}
     build: .
     restart: unless-stopped
     env_file:

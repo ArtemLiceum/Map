@@ -1,0 +1,104 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/artemliceum/map
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test_map"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: test_map
+      DB_USER: test
+      DB_PASSWORD: test
+      SECRET_KEY: ci-test-secret-key
+      SIGNING_KEY: ci-test-signing-key
+      DEBUG: "False"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: poetry run python manage.py test map_api
+
+  build-and-push:
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+  deploy:
+    needs: build-and-push
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/map
+            git fetch origin
+            git pull --ff-only origin dev || git pull --ff-only origin main
+            if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]; then
+              echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u ArtemLiceum --password-stdin
+            fi
+            export MAP_WEB_IMAGE=ghcr.io/artemliceum/map:latest
+            docker compose --profile localdb pull web
+            docker compose --profile localdb up -d --no-build
+            docker compose exec -T web python manage.py migrate --noinput
+            docker image prune -f

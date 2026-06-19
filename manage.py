@@ -2,12 +2,16 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:  # optional dependency for local env files
+    load_dotenv = None
 
 def main():
     """Run administrative tasks."""
 
-    load_dotenv()
+    if load_dotenv:
+        load_dotenv()
     
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'map_core.settings')
     try:
