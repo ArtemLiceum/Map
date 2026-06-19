@@ -295,3 +295,17 @@ footer {
     padding-bottom: 0px;
 }
 
+/* Заголовок страницы на фоне фото: читаемость */
+.page-hero-title {
+    font-size: clamp(1.375rem, 2.2vw, 1.5rem);
+    line-height: 1.35;
+    margin: 0 0 18px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    color: #111827;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+

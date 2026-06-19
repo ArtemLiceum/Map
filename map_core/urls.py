@@ -16,7 +16,18 @@ Including another URLconf
 """
 from django.urls import path, include
 from django.contrib import admin as django_admin
-from front.views import main, evac_plans, faq, tour_view, admin_login, admin_editor, register_view, login_view
+from front.views import (
+    main,
+    evac_plans,
+    faq,
+    tour_view,
+    admin_login,
+    admin_editor,
+    register_view,
+    login_view,
+    users_list,
+    user_edit,
+)
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
@@ -35,6 +46,8 @@ urlpatterns = [
     path('faq/', faq, name='faq'),
     path('tour/<int:plan_id>/', tour_view, name='tour_view'),
     path('admin/', admin_editor, name='admin'),
+    path('admin/users/', users_list, name='users_list'),
+    path('admin/users/<int:user_id>/', user_edit, name='user_edit'),
 
     # Auth
     path('admin-login/', admin_login, name='admin_login'),

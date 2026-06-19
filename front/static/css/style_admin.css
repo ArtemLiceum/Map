@@ -3,6 +3,69 @@ body { font-family: Inter, system-ui, Arial; margin: 16px; color: #111; }
 h1 { font-size: 20px; }
 .row { display: flex; gap: 16px; }
 .panel { flex: 1; background: #fafafa; border: 1px solid #eee; padding: 12px; border-radius: 8px; }
+
+/* Form spacing for admin editor and user edit pages */
+.panel h3,
+.panel h4 {
+  margin: 0 0 10px;
+}
+
+.panel hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.panel label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.panel label + input:not([type="checkbox"]):not([type="radio"]),
+.panel label + select,
+.panel label + textarea,
+.panel label > input:not([type="checkbox"]):not([type="radio"]),
+.panel label > select,
+.panel label > textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  color: #111827;
+  background: #fff;
+}
+
+.panel label + textarea,
+.panel label > textarea {
+  resize: vertical;
+}
+
+.panel input[type="checkbox"],
+.panel input[type="radio"] {
+  margin-right: 8px;
+}
+
+.panel select[multiple] {
+  min-height: 120px;
+}
+
+/* Редактор плана эвакуации: заголовок — класс .page-hero-title в style.css; крупнее подписи в панелях */
+.admin-evac-editor .panel label {
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.admin-evac-editor .panel .small,
+.admin-evac-editor .panel .hint {
+  font-size: 15px;
+  color: #4b5563;
+}
+
 #planWrap { position: relative; display: inline-block; border: 1px solid #ddd; }
 #plan { max-width: 100%; height: auto; display: block; }
 
@@ -15,12 +78,20 @@ h1 { font-size: 20px; }
   border: 2px solid #fff;
   box-shadow: 0 2px 6px rgba(0,0,0,.25);
   transform: translate(-50%,-50%);
-  cursor: pointer;
+  cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   font-weight: 600;
+  font-size: 15px;
+  line-height: 1;
+}
+.marker.dragging {
+  cursor: grabbing;
+}
+.marker.info {
+  background: #10b981;
 }
 .btn {
   display: inline-block;
@@ -32,9 +103,61 @@ h1 { font-size: 20px; }
   cursor: pointer;
 }
 .btn.gray { background: #6b7280; }
+.btn.danger { background: #dc2626; }
 
 .small { font-size: 13px; color: #666; }
 .hint { font-size: 13px; color: #666; margin-top: 8px; }
+.hidden { display: none !important; }
+
+/* Списки точек и туров: крупнее текст; кнопки ниже — компактнее и чуть мельче эмодзи */
+#pointsList,
+#toursList {
+  font-size: 16px;
+  color: #374151;
+}
+
+/* Список точек / туры: текст слева, кнопки справа */
+.admin-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.admin-list-row:last-child {
+  margin-bottom: 0;
+}
+.admin-list-row__meta {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+.admin-list-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.admin-list-row__actions button {
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 5px;
+  color: inherit;
+}
+.admin-list-row__actions button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.admin-section-actions {
+  text-align: right;
+  margin-top: 8px;
+}
 
 .modal {
   position: fixed;
@@ -43,9 +166,129 @@ h1 { font-size: 20px; }
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,.45);
+  z-index: 1000;
 }
 .modal .card { background: #fff; padding: 18px; border-radius: 10px; min-width: 320px; max-width: 90%; }
 .modal .card.wide { max-width: 1100px; }
+.modal .card label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #374151;
+}
+.modal .card input[type="text"],
+.modal .card textarea,
+.modal .card select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  color: #111827;
+}
+.modal .card textarea { resize: vertical; }
 .modal-buttons { margin-top: 12px; text-align: right; }
 .panorama-view { position: relative; border: 1px solid #ddd; overflow: hidden; }
 .panorama-view img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+.crop-controls { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+.crop-aspects label { margin-right: 10px; font-size: 13px; color: #333; }
+.crop-canvas-wrap { border: 1px solid #ddd; max-height: 70vh; overflow: hidden; }
+.crop-canvas-wrap img { max-width: 100%; display: block; }
+.crop-preview { width: 180px; height: 120px; border: 1px solid #ddd; overflow: hidden; background: #f9fafb; }
+
+.marker-card {
+  width: min(520px, 92vw);
+}
+
+/* Ensure stacked modals behave predictably */
+#panoramaModal { z-index: 1100; }
+#markerModal { z-index: 1200; }
+#cropModal { z-index: 1300; }
+
+#markerTransitionFields,
+#markerInfoFields {
+  margin-top: 8px;
+}
+
+#infoTours {
+  min-height: 120px;
+}
+
+/* --- Entry azimuth visual picker --- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+
+.entry-azimuth-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.entry-azimuth-label {
+  font-size: 13px;
+  color: #374151;
+}
+
+.entry-azimuth-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.entry-azimuth-reset {
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-left: auto;
+}
+
+.entry-azimuth-picker {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  cursor: crosshair;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin-top: 6px;
+  user-select: none;
+  background: #f3f4f6;
+}
+
+.entry-azimuth-picker img {
+  display: block;
+  width: 100%;
+  height: 80px;
+  object-fit: fill;
+}
+
+.entry-azimuth-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.entry-azimuth-cursor::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #ef4444;
+}

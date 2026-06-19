@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -20,13 +21,22 @@ from .config import(
     ACCESS_TOKEN_LIFETIME,
     REFRESH_TOKEN_LIFETIME,
     SIGNING_KEY,
+    SECRET_KEY as CONFIG_SECRET_KEY,
     DB_ENGINE,
     DB_HOST,
     DB_NAME,
     DB_PASSWORD,
     DB_PORT,
     DB_USER,
-    DEBUG,
+    DB_SSLMODE,
+    DEBUG as CONFIG_DEBUG,
+    USE_S3,
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_STORAGE_BUCKET_NAME,
+    AWS_S3_ENDPOINT_URL,
+    AWS_S3_PUBLIC_ENDPOINT_URL,
+    AWS_S3_REGION_NAME,
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,13 +47,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-v!l)$=@vw!j-on&2%t&k#&yr^)%ixj+-11um)1du-hajdw4+!p'
+SECRET_KEY = CONFIG_SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = CONFIG_DEBUG
 
 ALLOWED_HOSTS = ["*"]
 
+# Доверенные origins для CSRF (через туннель: задаётся entrypoint или .env)
+_extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [s.strip() for s in _extra_csrf.split(",") if s.strip()]
 
 # Application definition
 
@@ -108,6 +121,7 @@ DATABASES = {
         "PASSWORD": DB_PASSWORD,
         "HOST": DB_HOST,
         "PORT": DB_PORT,
+        **({"OPTIONS": {"sslmode": DB_SSLMODE}} if DB_SSLMODE else {}),
     }
 }
 
@@ -131,6 +145,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'map_core.auth_backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/4.0/topics/i18n/
 
@@ -148,10 +169,39 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+if USE_S3:
+    AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
+    AWS_STORAGE_BUCKET_NAME = AWS_STORAGE_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL = AWS_S3_ENDPOINT_URL
+    AWS_S3_PUBLIC_ENDPOINT_URL = AWS_S3_PUBLIC_ENDPOINT_URL or f"https://{os.environ.get('MAP_PUBLIC_HOST', 'ab46.tech')}/s3"
+    AWS_S3_REGION_NAME = AWS_S3_REGION_NAME
+    AWS_S3_ADDRESSING_STYLE = "path"
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = True
+    AWS_S3_FILE_OVERWRITE = False
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "map_core.storage.MapS3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 LOCALE_PATHS = [
     BASE_DIR / "locale",
@@ -186,6 +236,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
 }

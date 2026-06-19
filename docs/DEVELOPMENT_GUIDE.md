@@ -45,17 +45,19 @@ from .config import (
 # map_api/models.py
 
 class EvacPlan(models.Model):
-    """План эвакуации (карта здания)"""
+    """План эвакуации (карта здания / этаж)"""
     title = models.CharField(max_length=200)
+    floor = models.IntegerField(default=1)
     image = models.ImageField(upload_to='evac_plans/')
     created_at = models.DateTimeField(auto_now_add=True)
 
 class MapPoint(models.Model):
-    """Точка на плане эвакуации, переходящая в панораму"""
+    """Точка на плане эвакуации"""
     plan = models.ForeignKey(EvacPlan, related_name='points', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     x = models.FloatField(help_text="Координата X в процентах (0–100)")
     y = models.FloatField(help_text="Координата Y в процентах (0–100)")
+    info_text = models.TextField(null=True, blank=True, default='')
 
 class Panorama(models.Model):
     """Панорамное изображение, связанное с точкой"""
@@ -63,99 +65,70 @@ class Panorama(models.Model):
     image = models.ImageField(upload_to='panoramas/')
 
 class PanoramaMarker(models.Model):
-    """Метка в панораме для перехода к следующей точке"""
+    """Метка в панораме: transition (переход) или info (информационная)"""
+    class MarkerType(models.TextChoices):
+        TRANSITION = 'transition', 'Переходная'
+        INFO = 'info', 'Информационная'
+
     panorama = models.ForeignKey(Panorama, related_name='markers', on_delete=models.CASCADE)
-    target_point = models.ForeignKey(MapPoint, on_delete=models.CASCADE)
-    azimuth = models.FloatField(help_text="Угол (в градусах) направления на маркер")
-    pitch = models.FloatField(help_text="Угол (в градусах) по вертикали")
+    target_point = models.ForeignKey(MapPoint, null=True, blank=True, on_delete=models.CASCADE)
+    azimuth = models.FloatField()
+    pitch = models.FloatField(default=0)
+    label = models.CharField(max_length=100, blank=True, default='')
+    text = models.TextField(blank=True, default='')
+    type = models.CharField(max_length=20, choices=MarkerType.choices, default=MarkerType.TRANSITION)
 ```
 
 **Архитектурные решения:**
-- **OneToOneField** для Panorama-Point гарантирует одну панораму на точку
-- **ForeignKey** для PanoramaMarker позволяет множественные переходы
-- **FloatField** для координат обеспечивает точность до сотых долей процента
-- **related_name** упрощает доступ к связанным объектам
+- **EvacPlan.floor** — номер этажа для сортировки и фильтрации
+- **MapPoint.info_text** — текст при наведении на точку
+- **PanoramaMarker.type** — `transition` (переход, target_point обязателен) или `info` (target_point null)
 
 ### API Design
 
 ```python
 # map_api/views.py
-from rest_framework import viewsets
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
-from .serializers import (
-    EvacPlanSerializer, MapPointSerializer,
-    PanoramaSerializer, PanoramaMarkerSerializer
-)
+# ViewSet'ы используют AdminOnlyViewSetMixin:
+# - GET list/retrieve — AllowAny
+# - POST/PATCH/DELETE — IsAdminUser
 
-class EvacPlanViewSet(viewsets.ModelViewSet):
-    queryset = EvacPlan.objects.all()
-    serializer_class = EvacPlanSerializer
+class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
+    queryset = EvacPlan.objects.prefetch_related('points', 'points__panorama', 'points__panorama__markers').all()
+    # list: EvacPlanListSerializer (points_count); detail: EvacPlanSerializer
+    # Параметры: ?search=, ?floor=
+    # create/update поддерживают crop для обрезки изображений
 
-class MapPointViewSet(viewsets.ModelViewSet):
-    queryset = MapPoint.objects.select_related('plan').all()
-    serializer_class = MapPointSerializer
+class MapPointViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
+    queryset = MapPoint.objects.select_related('plan', 'panorama').prefetch_related('panorama__markers').all()
+    # Параметр: ?plan={id}
 
-class PanoramaViewSet(viewsets.ModelViewSet):
-    queryset = Panorama.objects.select_related('point').all()
-    serializer_class = PanoramaSerializer
+class PanoramaViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
+    # create заменяет существующую панораму точки при повторной загрузке
+    # crop для обрезки панорам
 
-class PanoramaMarkerViewSet(viewsets.ModelViewSet):
-    queryset = PanoramaMarker.objects.select_related('panorama', 'target_point').all()
-    serializer_class = PanoramaMarkerSerializer
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        panorama_id = self.request.query_params.get('panorama')
-        if panorama_id:
-            qs = qs.filter(panorama_id=panorama_id)
-        return qs
+class PanoramaMarkerViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
+    # Параметр: ?panorama={id}
 ```
 
 **Рекомендации:**
-- Использовать `select_related` для оптимизации запросов
-- Фильтровать queryset по параметрам запроса
-- Документировать API через docstrings
+- Использовать `select_related` и `prefetch_related` для оптимизации
+- Обрезка изображений через `map_api.utils.apply_crop`
 
 ### Сериализаторы
 
 ```python
 # map_api/serializers.py
-from rest_framework import serializers
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+# PanoramaMarkerSerializer: target_point_name (read_only), type, label, text
+# Валидация: transition требует target_point, info — target_point=None
 
-class PanoramaMarkerSerializer(serializers.ModelSerializer):
-    target_point_name = serializers.CharField(source='target_point.name', read_only=True)
-
-    class Meta:
-        model = PanoramaMarker
-        fields = ['id', 'panorama', 'target_point', 'target_point_name', 'azimuth', 'pitch']
-
-class PanoramaSerializer(serializers.ModelSerializer):
-    markers = PanoramaMarkerSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Panorama
-        fields = ['id', 'point', 'image', 'markers']
-
-class MapPointSerializer(serializers.ModelSerializer):
-    panorama = PanoramaSerializer(read_only=True)
-
-    class Meta:
-        model = MapPoint
-        fields = ['id', 'plan', 'name', 'x', 'y', 'panorama']
-
-class EvacPlanSerializer(serializers.ModelSerializer):
-    points = MapPointSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = EvacPlan
-        fields = ['id', 'title', 'image', 'points', 'created_at']
+# MapPointSerializer: id, plan, name, x, y, info_text, panorama
+# EvacPlanSerializer: id, title, floor, image, points, created_at
+# EvacPlanListSerializer: id, title, floor, image, points_count, created_at (для list view)
 ```
 
 **Архитектурные решения:**
-- **Nested serializers** для автоматического включения связанных данных
-- **Read-only поля** для вычисляемых значений (target_point_name)
-- **Many=True** для списков связанных объектов
+- **EvacPlanListSerializer** — облегчённый ответ для списка без вложенных points
+- **Nested serializers** для точек и маркеров
 
 ## Frontend Architecture
 
@@ -293,6 +266,15 @@ async function createPlan() {
 
 ## Рабочие процессы разработки
 
+### Маршруты frontend (map_core/urls.py)
+
+- `/` — главная (main)
+- `/evac_plans/` — галерея планов
+- `/tour/<plan_id>/` — просмотр тура (tour_view)
+- `/admin/` — редактор туров (admin_editor, staff only)
+- `/admin-login/` — вход для администраторов
+- `/login/`, `/register/`, `/logout/` — аутентификация
+
 ### Добавление новой сущности
 
 1. **Модель** → `map_api/models.py`
@@ -300,7 +282,7 @@ async function createPlan() {
 3. **Сериализатор** → `map_api/serializers.py`
 4. **ViewSet** → `map_api/views.py`
 5. **URL** → `map_api/urls.py`
-6. **Frontend API** → `front/static/js/admin.js`
+6. **Frontend API** → `front/static/js/admin.js` или `tour_viewer.js`
 7. **UI компоненты** → HTML + CSS + JS
 
 ### Добавление нового поля

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Пользователи{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
+<style>
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.users-table th,
+.users-table td {
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+}
+.users-table th {
+    background: #f3f4f6;
+    text-align: center;
+}
+.users-table td {
+    text-align: left;
+}
+.users-table tr:hover {
+    background: #f8fafc;
+    cursor: pointer;
+}
+.status-pill {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #fff;
+}
+.status-pill.green { background: #16a34a; }
+.status-pill.gray { background: #6b7280; }
+.status-pill.orange { background: #f97316; }
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.toolbar input {
+    max-width: 320px;
+}
+.empty {
+    padding: 24px;
+    color: #64748b;
+}
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.readonly {
+    background: #f8fafc;
+}
+.error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+.section-title {
+    margin-top: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-hero-title">Пользователи</h1>
+
+    <div class="panel stack" style="margin-bottom:16px;">
+        <h4 class="section-title">Кодовое слово для регистрации</h4>
+        <p class="small" style="margin:0;">Его вводят при регистрации нового пользователя на сайте.</p>
+        <div id="registrationCodeError" class="error-box" style="display:none;"></div>
+        <label>Текущее слово
+            <input id="registrationCodeWord" type="text" class="readonly" readonly placeholder="Не сгенерировано">
+        </label>
+        <div class="modal-buttons">
+            <button id="generateRegCodeBtn" type="button" class="btn">Сгенерировать</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="toolbar">
+            <input id="searchInput" class="form-control" type="search" placeholder="Поиск по имени, email, ФИО">
+            <button id="searchBtn" class="btn">Поиск</button>
+            <button id="resetBtn" class="btn gray">Сброс</button>
+        </div>
+
+        <div id="stateMessage" class="empty" style="display:none;"></div>
+
+        <div class="table-responsive">
+            <table class="users-table" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>Имя пользователя</th>
+                        <th>Email</th>
+                        <th>ФИО</th>
+                        <th>Активен</th>
+                        <th>Администратор туров</th>
+                        <th>Администратор пользователей</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/users_list.js' %}"></script>
+{% endblock %}

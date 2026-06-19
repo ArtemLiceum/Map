@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Редактирование пользователя{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
+<style>
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+.section-title {
+    margin-top: 0;
+}
+.readonly {
+    background: #f8fafc;
+}
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 12px;
+}
+.error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+.progress-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.progress-table th,
+.progress-table td {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px;
+    text-align: left;
+}
+.progress-table th {
+    background: #f8fafc;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-hero-title">Редактирование пользователя</h1>
+
+    <div class="panel stack">
+        <div id="globalError" class="error-box" style="display:none;"></div>
+
+        <div class="grid-2">
+            <div>
+                <h4 class="section-title">Профиль</h4>
+                <label>Имя пользователя
+                    <input id="username" type="text">
+                </label>
+                <label>Email
+                    <input id="email" type="email">
+                </label>
+                <label>Имя
+                    <input id="firstName" type="text">
+                </label>
+                <label>Фамилия
+                    <input id="lastName" type="text">
+                </label>
+            </div>
+            <div>
+                <h4 class="section-title">Доступ</h4>
+                <label><input id="isActive" type="checkbox"> Активен</label>
+                <label><input id="isStaff" type="checkbox"> Администратор туров</label>
+                <label><input id="isSuperuser" type="checkbox"> Администратор пользователей</label>
+
+                <h4 class="section-title">Служебное</h4>
+                <label>Дата создания
+                    <input id="dateJoined" type="text" class="readonly" readonly>
+                </label>
+                <label>Последний вход
+                    <input id="lastLogin" type="text" class="readonly" readonly>
+                </label>
+            </div>
+        </div>
+
+        <div>
+            <h4 class="section-title">Права</h4>
+            <input id="permSearch" class="form-control" type="search" placeholder="Поиск по названию или коду">
+            <select id="permissionsSelect" class="form-select" multiple size="10" style="margin-top:8px;"></select>
+        </div>
+
+        <div class="modal-buttons">
+            <button id="saveUserBtn" class="btn">Сохранить</button>
+        </div>
+    </div>
+
+    <div class="panel stack" style="margin-top:16px;">
+        <h4 class="section-title">Прогресс туров</h4>
+        <div id="tourProgressState" class="small">Загрузка...</div>
+        <div class="table-responsive">
+            <table class="progress-table" id="tourProgressTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Виртуальный тур</th>
+                        <th>Тур</th>
+                        <th>Прогресс</th>
+                        <th>Процент</th>
+                        <th>Последний просмотр</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel stack" style="margin-top:16px;">
+        <h4 class="section-title">Смена пароля</h4>
+        <div id="passwordError" class="error-box" style="display:none;"></div>
+        <label>Новый пароль
+            <input id="newPassword" type="password">
+        </label>
+        <label>Подтверждение
+            <input id="newPasswordConfirm" type="password">
+        </label>
+        <div class="modal-buttons">
+            <button id="changePasswordBtn" class="btn">Сменить пароль</button>
+        </div>
+    </div>
+
+    <div class="modal-buttons" style="margin-top:16px;">
+        <a href="{% url 'users_list' %}" class="btn gray">Назад к списку</a>
+    </div>
+</div>
+
+<script>
+    window.USER_ID = {{ user_id }};
+</script>
+<script src="{% static 'js/user_edit.js' %}"></script>
+{% endblock %}

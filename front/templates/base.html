@@ -24,7 +24,7 @@
             <a class="navbar-brand" href="https://kursksu.ru/">
                 <img src="{% static 'img/logo_brand.png' %}" alt="Logo" width="100" height="150" class="d-inline-block align-text-top">
             </a>
-            <h3 style="color: white;">Виртуальный тур по территории</h3>
+            <h3 style="color: white;">Виртуальные туры</h3>
             <h5 style="color: white;">Курского государственного университета</h5>
         </div>
     </div>
@@ -44,7 +44,12 @@
                 </li>
                 {% if user.is_authenticated and user.is_staff %}
                 <li class="nav-item mx-1">
-                    <a class="nav-link" href="{% url 'evac_plans' %}" data-nav-match="^/evac_plans/">Планы этажей</a>
+                    <a class="nav-link" href="{% url 'evac_plans' %}" data-nav-match="^/evac_plans/">Виртуальные туры</a>
+                </li>
+                {% endif %}
+                {% if user.is_authenticated and user.is_superuser %}
+                <li class="nav-item mx-1">
+                    <a class="nav-link" href="{% url 'users_list' %}" data-nav-match="^/admin/users">Пользователи</a>
                 </li>
                 {% endif %}
             </ul>
@@ -55,7 +60,8 @@
                 <li class="nav-item mx-1 d-flex align-items-center">
                     <span class="text-light me-2">
                         👤 {{ user.username }}
-                        {% if user.is_staff %}<span class="badge bg-warning text-dark ms-1">Админ</span>{% endif %}
+                        {% if user.is_staff %}<span class="badge bg-warning text-dark ms-1">Администратор туров</span>{% endif %}
+                        {% if user.is_superuser %}<span class="badge bg-info text-dark ms-1">Администратор пользователей</span>{% endif %}
                     </span>
                 </li>
                 <li class="nav-item mx-1">

@@ -27,6 +27,45 @@ poetry run python manage.py createsuperuser
 poetry run python manage.py runserver
 ```
 
+### Docker (подключение к существующей БД)
+
+1) Подготовьте окружение:
+
+```bash
+cp .env.example .env
+```
+
+2) В `.env` укажите параметры вашей существующей PostgreSQL (например Supabase/выделенный сервер):
+
+- `DB_HOST`, `DB_PORT`
+- `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+
+3) Запуск:
+
+```bash
+docker compose up --build
+```
+
+### Docker (локальная БД в контейнере — опционально)
+
+Если хотите, чтобы Postgres поднялся рядом в docker-compose:
+
+- В `.env` поставьте `DB_HOST=db`
+- Запускайте:
+
+```bash
+docker compose --profile localdb up --build
+```
+
+### Туннель (доступ извне по ссылке)
+
+Чтобы при запуске контейнера автоматически поднимался localtunnel и его URL добавлялся в доверенные для CSRF:
+
+- В `.env` добавьте: `ENABLE_TUNNEL=1`
+- Запустите: `docker compose up --build` (или с `--profile localdb`)
+
+В логах контейнера появится строка вида `Tunnel URL: https://xxx.loca.lt (...)` — по этому адресу можно открыть сайт с другого устройства; форма входа и POST-запросы будут работать без 403 CSRF.
+
 ## Переменные окружения
 
 Создайте файл `.env` в корне проекта:

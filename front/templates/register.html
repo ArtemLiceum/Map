@@ -38,7 +38,17 @@
         border-color: #0066a3;
         box-shadow: 0 0 0 3px rgba(0,102,163,0.15);
     }
-    .btn-auth {
+    .btn.btn-auth {
+        --bs-btn-color: #fff;
+        --bs-btn-bg: #0066a3;
+        --bs-btn-border-color: transparent;
+        --bs-btn-hover-color: #fff;
+        --bs-btn-hover-bg: #005a8f;
+        --bs-btn-hover-border-color: transparent;
+        --bs-btn-focus-shadow-rgb: 0, 102, 163;
+        --bs-btn-active-color: #fff;
+        --bs-btn-active-bg: #004d7a;
+        --bs-btn-active-border-color: transparent;
         width: 100%;
         padding: 12px;
         border-radius: 10px;
@@ -46,12 +56,24 @@
         background: linear-gradient(135deg, #0066a3, #009cbf);
         border: none;
         color: #fff;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s, background 0.2s, background-color 0.2s, color 0.2s;
     }
-    .btn-auth:hover {
+    .btn.btn-auth:hover {
+        color: #fff;
+        background: linear-gradient(135deg, #005a8f, #0088a8);
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,102,163,0.3);
+    }
+    .btn.btn-auth:focus-visible {
         color: #fff;
+        background: linear-gradient(135deg, #005a8f, #0088a8);
+        box-shadow: 0 4px 12px rgba(0,102,163,0.3), 0 0 0 0.25rem rgba(0, 102, 163, 0.35);
+    }
+    .btn.btn-auth:active {
+        color: #fff;
+        background: linear-gradient(135deg, #004d7a, #007399);
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(0,102,163,0.25);
     }
     .auth-footer {
         text-align: center;
@@ -110,15 +132,29 @@
             {% csrf_token %}
 
             <div class="form-floating">
-                <input type="text" class="form-control {% if form.username.errors %}is-invalid{% endif %}"
-                       id="username" name="username"
-                       placeholder="Имя пользователя"
-                       value="{{ form.username.value|default:'' }}"
+                <input type="email" class="form-control {% if form.email.errors %}is-invalid{% endif %}"
+                       id="email" name="email"
+                       placeholder="Email"
+                       value="{{ form.email.value|default:'' }}"
                        required autofocus>
-                <label for="username">Имя пользователя</label>
-                {% if form.username.errors %}
+                <label for="email">Email</label>
+                {% if form.email.errors %}
                     <div class="invalid-feedback">
-                        {% for error in form.username.errors %}{{ error }}{% endfor %}
+                        {% for error in form.email.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-floating">
+                <input type="text" class="form-control {% if form.code_word.errors %}is-invalid{% endif %}"
+                       id="code_word" name="code_word"
+                       placeholder="Кодовое слово"
+                       value="{{ form.code_word.value|default:'' }}"
+                       required autocomplete="off">
+                <label for="code_word">Кодовое слово</label>
+                {% if form.code_word.errors %}
+                    <div class="invalid-feedback">
+                        {% for error in form.code_word.errors %}{{ error }}{% endfor %}
                     </div>
                 {% endif %}
             </div>

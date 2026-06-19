@@ -1,11 +1,44 @@
 from django.contrib import admin
-from .models import EvacPlan, MapPoint, Panorama, PanoramaMarker
+from django.contrib.admin.models import ACTION_FLAG_CHOICES, LogEntry
+
+from .models import (
+    EvacPlan,
+    Facility,
+    MapPoint,
+    Panorama,
+    PanoramaMarker,
+    Tour,
+    TourInfoMarkerView,
+    TourMarker,
+)
+
+
+@admin.register(LogEntry)
+class LogEntryAdmin(admin.ModelAdmin):
+    list_display = ("action_time", "user", "content_type", "object_repr", "action_flag_label")
+    list_filter = ("action_time", "content_type", "user", "action_flag")
+    search_fields = ("object_repr", "change_message")
+    date_hierarchy = "action_time"
+    readonly_fields = [f.name for f in LogEntry._meta.fields]
+
+    @admin.display(description="Действие")
+    def action_flag_label(self, obj):
+        return dict(ACTION_FLAG_CHOICES).get(obj.action_flag, obj.action_flag)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class PanoramaMarkerInline(admin.TabularInline):
     model = PanoramaMarker
     extra = 1
-    fields = ('target_point', 'azimuth', 'pitch', 'label')
+    fields = ('type', 'target_point', 'azimuth', 'pitch', 'label', 'text')
 
 
 class PanoramaInline(admin.StackedInline):
@@ -17,22 +50,29 @@ class PanoramaInline(admin.StackedInline):
 class MapPointInline(admin.TabularInline):
     model = MapPoint
     extra = 1
-    fields = ('name', 'type', 'x', 'y', 'info_text')
+    fields = ('name', 'x', 'y', 'info_text')
 
 
 @admin.register(EvacPlan)
 class EvacPlanAdmin(admin.ModelAdmin):
-    list_display = ('title', 'floor', 'created_at')
-    list_filter = ('floor',)
-    search_fields = ('title',)
-    ordering = ('floor', 'title')
+    list_display = ("title", "floor", "facility", "created_at")
+    list_filter = ("facility", "floor")
+    search_fields = ("title",)
+    ordering = ("facility_id", "floor", "title")
     inlines = [MapPointInline]
+
+
+@admin.register(Facility)
+class FacilityAdmin(admin.ModelAdmin):
+    list_display = ("title", "created_at")
+    search_fields = ("title",)
+    ordering = ("title",)
 
 
 @admin.register(MapPoint)
 class MapPointAdmin(admin.ModelAdmin):
-    list_display = ('name', 'plan', 'type', 'x', 'y')
-    list_filter = ('type', 'plan')
+    list_display = ('name', 'plan', 'x', 'y')
+    list_filter = ('plan',)
     search_fields = ('name', 'info_text')
     inlines = [PanoramaInline]
 
@@ -46,9 +86,30 @@ class PanoramaAdmin(admin.ModelAdmin):
 
 @admin.register(PanoramaMarker)
 class PanoramaMarkerAdmin(admin.ModelAdmin):
-    # list_display = ('panorama', 'target_point', 'label', 'azimuth', 'pitch')
+    list_display = ('panorama', 'type', 'target_point', 'label', 'azimuth', 'pitch')
     list_filter = ('panorama__point__plan',)
-    # search_fields = ('label', 'panorama__point__name', 'target_point__name')
+    search_fields = ('label', 'text', 'panorama__point__name', 'target_point__name')
+
+
+@admin.register(Tour)
+class TourAdmin(admin.ModelAdmin):
+    list_display = ('title', 'plan', 'is_active', 'created_at')
+    list_filter = ('plan', 'is_active')
+    search_fields = ('title',)
+
+
+@admin.register(TourMarker)
+class TourMarkerAdmin(admin.ModelAdmin):
+    list_display = ('tour', 'marker')
+    list_filter = ('tour__plan',)
+
+
+@admin.register(TourInfoMarkerView)
+class TourInfoMarkerViewAdmin(admin.ModelAdmin):
+    list_display = ('user', 'tour', 'marker', 'viewed_at')
+    list_filter = ('tour__plan', 'tour', 'user')
+    search_fields = ('user__username', 'user__email', 'tour__title', 'marker__label')
+    ordering = ('-viewed_at',)
 
 
 # @admin.register(PanoramaInfoPoint)

@@ -12,7 +12,7 @@ function renderEmpty(message) {
   if (!toursContainer) return;
   toursContainer.innerHTML = '';
   const placeholder = document.createElement('div');
-  placeholder.className = 'col-12 text-muted small';
+  placeholder.className = 'tours-empty text-muted small';
   placeholder.textContent = message;
   toursContainer.appendChild(placeholder);
 }
@@ -28,8 +28,8 @@ function renderTours(tours) {
   toursContainer.innerHTML = '';
 
   tours.forEach(tour => {
-    const col = document.createElement('div');
-    col.className = 'col-12 col-sm-6 col-md-4 col-lg-3';
+    const cardWrapper = document.createElement('div');
+    cardWrapper.className = 'tour-card-item';
 
     const card = document.createElement('div');
     card.className = 'card h-100 shadow-sm tour-card';
@@ -62,11 +62,16 @@ function renderTours(tours) {
     card.appendChild(body);
     card.addEventListener('click', () => {
       if (tour.id == null) return;
+      const facilityId = tour.facility_id ?? tour.facilityId ?? null;
+      if (facilityId != null && Number.isFinite(Number(facilityId))) {
+        window.location.href = `/tour/${tour.id}/?facility=${encodeURIComponent(facilityId)}`;
+        return;
+      }
       window.location.href = `/tour/${tour.id}/`;
     });
 
-    col.appendChild(card);
-    toursContainer.appendChild(col);
+    cardWrapper.appendChild(card);
+    toursContainer.appendChild(cardWrapper);
   });
 }
 
