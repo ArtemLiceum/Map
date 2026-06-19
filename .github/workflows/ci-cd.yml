@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [dev, master, main]
   pull_request:
-    branches: [main]
+    branches: [dev, master, main]
 
 env:
   REGISTRY: ghcr.io
@@ -59,7 +59,7 @@ jobs:
 
   build-and-push:
     needs: test
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
 
   deploy:
     needs: build-and-push
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
@@ -93,7 +93,7 @@ jobs:
             set -euo pipefail
             cd /opt/map
             git fetch origin
-            git pull --ff-only origin dev || git pull --ff-only origin main
+            git pull --ff-only origin dev || git pull --ff-only origin master || git pull --ff-only origin main
             if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]; then
               echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u ArtemLiceum --password-stdin
             fi
