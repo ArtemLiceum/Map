@@ -1140,6 +1140,7 @@ async function openPanorama(point){
   let targetPointDropdownOpen = false;
   let targetPointBlurTimer = null;
   let targetPointPointerDownInDropdown = false;
+  let targetPointSuppressFocusOpen = false;
 
   function setTargetPointsSelectLoading() {
     if (!targetPointSelect) return;
@@ -1692,10 +1693,14 @@ async function openPanorama(point){
   markerType.onchange = () => {
     updateMarkerTypeFieldsVisibility();
   };
-  targetPointQuery && (targetPointQuery.onfocus = () => {
+  targetPointQuery && (targetPointQuery.onfocus = (e) => {
     if (targetPointBlurTimer) {
       clearTimeout(targetPointBlurTimer);
       targetPointBlurTimer = null;
+    }
+    if (targetPointSuppressFocusOpen || (e && e.isTrusted === false)) {
+      targetPointSuppressFocusOpen = false;
+      return;
     }
     openTargetPointDropdown();
     updateTargetPointSearchResults();
@@ -1760,6 +1765,7 @@ async function openPanorama(point){
     const pid = parseInt(row.dataset.pointId || '', 10);
     if (!Number.isFinite(pid)) return;
     selectTargetPoint(pid, { updateQuery: true, closeDropdown: true });
+    targetPointSuppressFocusOpen = true;
     targetPointQuery?.focus();
   });
   markerCancelBtn.onclick = closeMarkerModal;
