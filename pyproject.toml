@@ -40,3 +40,8 @@ boto3 = "^1.43.31"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "coverage (>=7.14.2,<8.0.0)"
+]

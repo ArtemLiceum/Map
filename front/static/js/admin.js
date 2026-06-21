@@ -83,6 +83,9 @@ const addFacilityBtn = document.getElementById('addFacilityBtn');
 const facilityPlansList = document.getElementById('facilityPlansList');
 
 let cropper = null;
+let cropDialogOpen = null;
+let pointSaveInFlight = false;
+let panoramaImageOpInFlight = false;
 
 let tempPointCoords = null;
 let editingPoint = null;
@@ -466,31 +469,44 @@ function buildCropData(cropperInstance) {
   };
 }
 
-function closeCropper() {
+function revokeCropObjectUrl() {
+  const prev = cropImage.dataset.objectUrl;
+  if (prev) {
+    URL.revokeObjectURL(prev);
+    delete cropImage.dataset.objectUrl;
+  }
+}
+
+function closeCropper({ rejectPending = false } = {}) {
+  if (rejectPending && cropDialogOpen && !cropDialogOpen.settled) {
+    cropDialogOpen.settled = true;
+    const reject = cropDialogOpen.reject;
+    cropDialogOpen = null;
+    reject(new Error('Обрезка отменена'));
+  }
+  cropImage.onload = null;
   if (cropper) {
     cropper.destroy();
     cropper = null;
   }
+  revokeCropObjectUrl();
   cropModal.style.display = 'none';
 }
 
 async function openCropperDialog({ file, title = 'Обрезка', aspect = 'free' }) {
-  return new Promise((resolve, reject) => {
+  if (cropDialogOpen) {
+    return cropDialogOpen.promise;
+  }
+
+  const session = { settled: false, reject: null, promise: null };
+  cropDialogOpen = session;
+
+  session.promise = new Promise((resolve, reject) => {
+    session.reject = reject;
+
     cropTitle.innerText = title;
     cropPreview.innerHTML = '';
     cropAspectInputs.forEach(input => { input.checked = input.value === aspect; });
-    const url = URL.createObjectURL(file);
-    cropImage.onload = () => {
-      if (cropper) cropper.destroy();
-      cropper = new Cropper(cropImage, {
-        viewMode: 2,
-        autoCropArea: 1,
-        aspectRatio: aspectToRatio(aspect),
-        preview: cropPreview,
-      });
-    };
-    cropImage.src = url;
-    cropModal.style.display = 'flex';
 
     function onAspectChange(ev) {
       if (!cropper) return;
@@ -505,18 +521,49 @@ async function openCropperDialog({ file, title = 'Обрезка', aspect = 'fre
       cropCancelBtn.onclick = null;
     };
 
-    const onConfirm = () => {
-      if (!cropper) return;
-      const cropData = buildCropData(cropper);
+    const finish = (fn, value) => {
+      if (session.settled) return;
+      session.settled = true;
+      cropDialogOpen = null;
       cleanup();
       closeCropper();
-      resolve({ file, crop: cropData });
+      fn(value);
     };
-    const onCancel = () => { cleanup(); closeCropper(); reject(new Error('Обрезка отменена')); };
+
+    const onConfirm = () => {
+      if (!cropper || session.settled) return;
+      const cropData = buildCropData(cropper);
+      finish(resolve, { file, crop: cropData });
+    };
+    const onCancel = () => finish(reject, new Error('Обрезка отменена'));
 
     cropConfirmBtn.onclick = onConfirm;
     cropCancelBtn.onclick = onCancel;
+
+    revokeCropObjectUrl();
+    const url = URL.createObjectURL(file);
+    cropImage.dataset.objectUrl = url;
+    cropImage.onload = () => {
+      if (session.settled) return;
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(cropImage, {
+        viewMode: 2,
+        autoCropArea: 1,
+        aspectRatio: aspectToRatio(aspect),
+        preview: cropPreview,
+      });
+    };
+    cropImage.src = url;
+    cropModal.style.display = 'flex';
   });
+
+  return session.promise;
+}
+
+function takePanoramaUploadFile() {
+  const file = panoramaUpload.files?.[0] || null;
+  panoramaUpload.value = '';
+  return file;
 }
 
 async function fileFromUrl(url, fallbackName = 'image.jpg') {
@@ -709,68 +756,77 @@ function openPointModal(point = null) {
 cancelPointBtn.addEventListener('click', () => { pointModal.style.display = 'none'; tempPointCoords = null; });
 
 savePointBtn.addEventListener('click', async () => {
+  if (pointSaveInFlight) return;
   const name = pointName.value.trim() || 'Точка';
   const infoText = (pointInfoText?.value || '').trim();
-  if(editingPoint){
-    // Persist point changes to server (previously it updated only UI/LocalStorage)
-    try {
-      const updated = await updateMapPoint(editingPoint.id, {
-        name,
-        x: editingPoint.x,
-        y: editingPoint.y,
-        info_text: infoText
-      });
-      editingPoint.name = updated.name;
-      editingPoint.x = updated.x;
-      editingPoint.y = updated.y;
-      editingPoint.info_text = updated.info_text;
-    } catch (err) {
-      alert(err.message || 'Не удалось сохранить изменения точки');
-      return;
-    }
+  const panoramaFile = takePanoramaUploadFile();
+  pointSaveInFlight = true;
+  savePointBtn.disabled = true;
+  try {
+    if(editingPoint){
+      // Persist point changes to server (previously it updated only UI/LocalStorage)
+      try {
+        const updated = await updateMapPoint(editingPoint.id, {
+          name,
+          x: editingPoint.x,
+          y: editingPoint.y,
+          info_text: infoText
+        });
+        editingPoint.name = updated.name;
+        editingPoint.x = updated.x;
+        editingPoint.y = updated.y;
+        editingPoint.info_text = updated.info_text;
+      } catch (err) {
+        alert(err.message || 'Не удалось сохранить изменения точки');
+        return;
+      }
 
-    if(panoramaUpload.files.length){
+      if(panoramaFile){
+        try {
+          const { file: croppedFile, crop } = await openCropperDialog({
+            file: panoramaFile,
+            title: 'Обрезка панорамы',
+            aspect: '21:9'
+          });
+          const panoData = await uploadPanorama(editingPoint.id, croppedFile, crop);
+          editingPoint.panorama = { id: panoData.id, imageUrl: panoData.image, markers: [] };
+        } catch (err) {
+          if (err.message !== 'Обрезка отменена') alert(err.message);
+          return;
+        }
+      }
+      saveState(); renderAll(); pointModal.style.display = 'none'; return;
+    }
+    const planId = state.plan.id; if(!planId) return alert('Сначала нужно добавить план');
+    const pointData = await createPoint(planId, name, tempPointCoords.x, tempPointCoords.y, infoText);
+    const point = {
+      id: pointData.id,
+      name: pointData.name,
+      x: pointData.x,
+      y: pointData.y,
+      info_text: pointData.info_text ?? '',
+      panorama: null
+    };
+    if(panoramaFile){
       try {
         const { file: croppedFile, crop } = await openCropperDialog({
-          file: panoramaUpload.files[0],
+          file: panoramaFile,
           title: 'Обрезка панорамы',
           aspect: '21:9'
         });
-        const panoData = await uploadPanorama(editingPoint.id, croppedFile, crop);
-        editingPoint.panorama = { id: panoData.id, imageUrl: panoData.image, markers: [] };
+        const panoData = await uploadPanorama(point.id, croppedFile, crop);
+        point.panorama = { id: panoData.id, imageUrl: panoData.image, markers: [] };
       } catch (err) {
         if (err.message !== 'Обрезка отменена') alert(err.message);
         return;
       }
     }
-    saveState(); renderAll(); pointModal.style.display = 'none'; return;
+    state.points.push(point); saveState(); renderAll();
+    pointModal.style.display = 'none'; tempPointCoords = null;
+  } finally {
+    pointSaveInFlight = false;
+    savePointBtn.disabled = false;
   }
-  const planId = state.plan.id; if(!planId) return alert('Сначала нужно добавить план');
-  const pointData = await createPoint(planId, name, tempPointCoords.x, tempPointCoords.y, infoText);
-  const point = {
-    id: pointData.id,
-    name: pointData.name,
-    x: pointData.x,
-    y: pointData.y,
-    info_text: pointData.info_text ?? '',
-    panorama: null
-  };
-  if(panoramaUpload.files.length){
-    try {
-      const { file: croppedFile, crop } = await openCropperDialog({
-        file: panoramaUpload.files[0],
-        title: 'Обрезка панорамы',
-        aspect: '21:9'
-      });
-      const panoData = await uploadPanorama(point.id, croppedFile, crop);
-      point.panorama = { id: panoData.id, imageUrl: panoData.image, markers: [] };
-    } catch (err) {
-      if (err.message !== 'Обрезка отменена') alert(err.message);
-      return;
-    }
-  }
-  state.points.push(point); saveState(); renderAll();
-  pointModal.style.display = 'none'; tempPointCoords = null;
 });
 
 // --- Render ---
@@ -1262,6 +1318,10 @@ async function openPanorama(point){
 
   if (panoramaCropBtn) {
     panoramaCropBtn.onclick = async () => {
+      if (panoramaImageOpInFlight) return;
+      panoramaImageOpInFlight = true;
+      panoramaCropBtn.disabled = true;
+      if (panoramaReplaceBtn) panoramaReplaceBtn.disabled = true;
       try {
         const srcFile = await fileFromUrl(point.panorama.imageUrl, `${point.name}.jpg`);
         const { file: croppedFile, crop } = await openCropperDialog({
@@ -1281,16 +1341,26 @@ async function openPanorama(point){
       } catch (err) {
         console.error(err);
         if (err.message !== 'Обрезка отменена') alert(err.message);
+      } finally {
+        panoramaImageOpInFlight = false;
+        panoramaCropBtn.disabled = false;
+        if (panoramaReplaceBtn) panoramaReplaceBtn.disabled = false;
       }
     };
   }
 
   if (panoramaReplaceBtn && panoramaReplaceInput) {
-    panoramaReplaceBtn.onclick = () => panoramaReplaceInput.click();
+    panoramaReplaceBtn.onclick = () => {
+      if (panoramaImageOpInFlight) return;
+      panoramaReplaceInput.click();
+    };
     panoramaReplaceInput.onchange = async ev => {
       const file = ev.target.files[0];
       panoramaReplaceInput.value = '';
-      if (!file) return;
+      if (!file || panoramaImageOpInFlight) return;
+      panoramaImageOpInFlight = true;
+      panoramaCropBtn.disabled = true;
+      panoramaReplaceBtn.disabled = true;
       try {
         const { file: croppedFile, crop } = await openCropperDialog({
           file,
@@ -1309,6 +1379,10 @@ async function openPanorama(point){
       } catch (err) {
         console.error(err);
         if (err.message !== 'Обрезка отменена') alert(err.message);
+      } finally {
+        panoramaImageOpInFlight = false;
+        panoramaCropBtn.disabled = false;
+        panoramaReplaceBtn.disabled = false;
       }
     };
   }
@@ -1906,7 +1980,7 @@ async function openPanorama(point){
 document.querySelectorAll('.modal').forEach(m => m.addEventListener('pointerdown', e => {
   if (e.target !== m) return;
   if (m === cropModal) {
-    closeCropper();
+    closeCropper({ rejectPending: true });
   } else {
     m.style.display = 'none';
   }
