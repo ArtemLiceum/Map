@@ -55,7 +55,7 @@ class MapPointInline(admin.TabularInline):
 
 @admin.register(EvacPlan)
 class EvacPlanAdmin(admin.ModelAdmin):
-    list_display = ("title", "floor", "facility", "created_at")
+    list_display = ("title", "floor", "facility", "start_point", "created_at")
     list_filter = ("facility", "floor")
     search_fields = ("title",)
     ordering = ("facility_id", "floor", "title")

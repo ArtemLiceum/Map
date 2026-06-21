@@ -171,10 +171,28 @@ class EvacPlanSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
+    start_point = serializers.PrimaryKeyRelatedField(
+        queryset=MapPoint.objects.all(),
+        allow_null=True,
+        required=False,
+    )
 
     class Meta:
         model = EvacPlan
-        fields = ['id', 'title', 'floor', 'image', 'facility', 'facility_id', 'points', 'created_at']
+        fields = [
+            'id', 'title', 'floor', 'image', 'facility', 'facility_id',
+            'start_point', 'points', 'created_at',
+        ]
+
+    def validate_start_point(self, value):
+        if value is None:
+            return value
+        instance = self.instance
+        if instance is None or instance.pk is None:
+            raise serializers.ValidationError('Начальная точка задаётся после создания плана.')
+        if value.plan_id != instance.pk:
+            raise serializers.ValidationError('Начальная точка должна принадлежать этому плану.')
+        return value
 
 
 class EvacPlanListSerializer(serializers.ModelSerializer):

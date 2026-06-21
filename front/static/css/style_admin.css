@@ -54,6 +54,21 @@ h1 { font-size: 20px; }
   min-height: 120px;
 }
 
+#startPointSelect,
+#facilitySelect {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  cursor: pointer;
+  background-color: #fff;
+}
+
+#startPointSelect:disabled,
+#facilitySelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 /* Редактор плана эвакуации: заголовок — класс .page-hero-title в style.css; крупнее подписи в панелях */
 .admin-evac-editor .panel label {
   font-size: 15px;

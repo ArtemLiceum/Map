@@ -49,6 +49,18 @@
         </div>
       </div>
       <hr />
+      <h3>Начальная точка тура</h3>
+      <div class="small">
+        <label for="startPointSelect">Точка входа при просмотре</label>
+        <select id="startPointSelect">
+          <option value="">Авто (первая с панорамой)</option>
+        </select>
+        <div class="hint admin-section-actions" style="margin-top:6px;">
+          <button id="startPointAssignBtn" class="btn gray" type="button">Применить</button>
+        </div>
+        <div id="startPointHint" class="hint">Выберите точку в списке и нажмите «Применить». Доступны только точки с панорамой.</div>
+      </div>
+      <hr />
       <h3>Объект</h3>
       <div class="small">
         <label>Объект для текущего плана
@@ -198,5 +210,5 @@
 
 <!-- Подключаем JS -->
 <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
-<script src="{% static 'js/admin.js' %}?v=2026-05-26"></script>
+<script src="{% static 'js/admin.js' %}?v=2026-06-21"></script>
 {% endblock %}

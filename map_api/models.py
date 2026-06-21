@@ -33,6 +33,15 @@ class EvacPlan(models.Model):
         db_index=True,
         verbose_name="Facility",
     )
+    start_point = models.ForeignKey(
+        'MapPoint',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name="Начальная точка тура",
+        help_text="Точка, с которой начинается просмотр. Пусто — первая точка с панорамой.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -42,6 +51,17 @@ class EvacPlan(models.Model):
 
     def __str__(self):
         return f"{self.title} (этаж {self.floor})"
+
+    def clean(self):
+        super().clean()
+        if self.start_point_id is None:
+            return
+        if self.pk is None:
+            return
+        if self.start_point.plan_id != self.pk:
+            raise ValidationError({
+                'start_point': 'Начальная точка должна принадлежать этому плану.',
+            })
 
 
 class MapPoint(models.Model):

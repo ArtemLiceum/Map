@@ -69,6 +69,9 @@ const cropAspectInputs = document.querySelectorAll('input[name="cropAspect"]');
 // --- Facility UI ---
 const facilitySelect = document.getElementById('facilitySelect');
 const facilityAssignBtn = document.getElementById('facilityAssignBtn');
+const startPointSelect = document.getElementById('startPointSelect');
+const startPointAssignBtn = document.getElementById('startPointAssignBtn');
+const startPointHint = document.getElementById('startPointHint');
 const facilitiesList = document.getElementById('facilitiesList');
 const addFacilityBtn = document.getElementById('addFacilityBtn');
 const facilityPlansList = document.getElementById('facilityPlansList');
@@ -92,6 +95,16 @@ function adminEscapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/** URL панорамы точки (поддержка imageUrl и image из API/localStorage). */
+function pointPanoramaUrl(point) {
+  if (!point?.panorama) return null;
+  return point.panorama.imageUrl || point.panorama.image || null;
+}
+
+function pointHasPanorama(point) {
+  return !!pointPanoramaUrl(point);
 }
 
 /** Сравнение id сущностей из API/localStorage (число vs строка). */
@@ -301,6 +314,28 @@ async function patchPlanFacility(planId, facilityIdOrNull) {
   return await res.json();
 }
 
+async function patchPlanStartPoint(planId, pointIdOrNull) {
+  const payload = { start_point: pointIdOrNull };
+  const res = await apiFetch(`${API.createPlan}${planId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) {
+    let detail = 'Не удалось обновить начальную точку';
+    try {
+      const err = await res.json();
+      if (err?.start_point) detail = Array.isArray(err.start_point) ? err.start_point.join(' ') : String(err.start_point);
+      else if (err?.detail) detail = String(err.detail);
+    } catch (_) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return await res.json();
+}
+
 async function createTour(planId, title, is_active = true) {
   const res = await apiFetch(API.createTour, {
     method: 'POST',
@@ -470,7 +505,7 @@ async function loadPlanFromServer(planId) {
   if (!res.ok) throw new Error('Не удалось загрузить план');
   const data = await res.json();
 
-  state.plan = { id: data.id, title: data.title, imageUrl: data.image, facility_id: data.facility_id ?? null };
+  state.plan = { id: data.id, title: data.title, imageUrl: data.image, facility_id: data.facility_id ?? null, start_point_id: data.start_point ?? null };
   state.points = (data.points || []).map(pt => ({
     id: pt.id,
     name: pt.name,
@@ -688,7 +723,60 @@ function renderAll() {
     </div>`).join('') || '<div class="small">Точек пока нет</div>';
 
   renderTours();
+  renderStartPointSelect();
   renderFacilities();
+}
+
+function renderStartPointSelect() {
+  if (!startPointSelect) return;
+
+  const hasPlan = !!state.plan?.id;
+  startPointSelect.disabled = !hasPlan;
+  if (startPointAssignBtn) startPointAssignBtn.disabled = !hasPlan;
+
+  startPointSelect.innerHTML = '';
+  const autoOpt = document.createElement('option');
+  autoOpt.value = '';
+  autoOpt.textContent = 'Авто (первая с панорамой)';
+  startPointSelect.appendChild(autoOpt);
+
+  if (!hasPlan) {
+    if (startPointHint) {
+      startPointHint.textContent = 'Сначала загрузите или откройте план.';
+    }
+    return;
+  }
+
+  const points = state.points || [];
+  const withPano = points.filter(pointHasPanorama);
+
+  points.forEach(pt => {
+    const opt = document.createElement('option');
+    opt.value = String(pt.id);
+    const hasPano = pointHasPanorama(pt);
+    opt.textContent = hasPano
+      ? (pt.name || `Точка ${pt.id}`)
+      : `${pt.name || `Точка ${pt.id}`} (нет панорамы)`;
+    opt.disabled = !hasPano;
+    startPointSelect.appendChild(opt);
+  });
+
+  const current = state.plan?.start_point_id ?? null;
+  if (current != null && withPano.some(p => Number(p.id) === Number(current))) {
+    startPointSelect.value = String(current);
+  } else {
+    startPointSelect.value = '';
+  }
+
+  if (startPointHint) {
+    if (!points.length) {
+      startPointHint.textContent = 'На плане пока нет точек. Добавьте точку с панорамой.';
+    } else if (!withPano.length) {
+      startPointHint.textContent = 'Нет точек с панорамой — загрузите панораму хотя бы для одной точки.';
+    } else {
+      startPointHint.textContent = 'Выберите точку в списке и нажмите «Применить».';
+    }
+  }
 }
 
 function renderFacilities() {
@@ -1560,6 +1648,21 @@ facilityAssignBtn?.addEventListener('click', async () => {
   }
 });
 
+startPointAssignBtn?.addEventListener('click', async () => {
+  if (!state.plan?.id) return alert('Сначала выберите/создайте план');
+  const raw = startPointSelect?.value ?? '';
+  const pointId = raw ? parseInt(raw, 10) : null;
+  if (raw && !Number.isFinite(pointId)) return alert('Некорректная точка');
+  try {
+    const updated = await patchPlanStartPoint(state.plan.id, pointId);
+    state.plan.start_point_id = updated.start_point ?? null;
+    saveState();
+    renderStartPointSelect();
+  } catch (err) {
+    alert(err.message || 'Не удалось назначить начальную точку');
+  }
+});
+
 facilitiesList?.addEventListener('click', async (e) => {
   const btn = clickEventTargetElement(e)?.closest('button[data-facility-action]');
   if (!btn || !facilitiesList.contains(btn)) return;
@@ -1624,4 +1727,5 @@ facilitiesList?.addEventListener('click', async (e) => {
   const handled = await initFromQuery();
   if (!handled) loadState();
   await refreshFacilitiesUI().catch(err => console.warn(err));
+  renderAll();
 })();

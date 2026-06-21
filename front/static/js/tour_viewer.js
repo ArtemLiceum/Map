@@ -739,6 +739,11 @@
       const exists = points.find(p => Number(p.id) === Number(requested));
       if (exists) return exists.id;
     }
+    const configured = state.plan?.start_point;
+    if (configured != null) {
+      const found = points.find(p => Number(p.id) === Number(configured));
+      if (found) return found.id;
+    }
     const withPano = points.find(p => p.panorama && p.panorama.image);
     return withPano ? withPano.id : (points[0]?.id ?? null);
   }
