@@ -81,7 +81,7 @@ async function loadTours() {
     const res = await fetch(TOURS_API);
     if (!res.ok) throw new Error('Не удалось загрузить туры');
     const data = await res.json();
-    const tours = normalizeTours(data);
+    const tours = normalizeTours(data).filter(t => t.is_active !== false);
     if (!tours.length) {
       renderEmpty('Туры пока не добавлены.');
       setStatus('Нет туров');

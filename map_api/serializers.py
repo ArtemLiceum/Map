@@ -181,7 +181,7 @@ class EvacPlanSerializer(serializers.ModelSerializer):
         model = EvacPlan
         fields = [
             'id', 'title', 'floor', 'image', 'facility', 'facility_id',
-            'start_point', 'points', 'created_at',
+            'start_point', 'is_active', 'points', 'created_at',
         ]
 
     def validate_start_point(self, value):
@@ -202,7 +202,7 @@ class EvacPlanListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EvacPlan
-        fields = ['id', 'title', 'floor', 'image', 'facility_id', 'points_count', 'created_at']
+        fields = ['id', 'title', 'floor', 'image', 'facility_id', 'is_active', 'points_count', 'created_at']
 
     def get_points_count(self, obj):
         return obj.points.count()
@@ -353,7 +353,7 @@ class FacilitySerializer(serializers.ModelSerializer):
 class FacilityPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = EvacPlan
-        fields = ['id', 'title', 'floor', 'image']
+        fields = ['id', 'title', 'floor', 'image', 'is_active']
         read_only_fields = fields
 
 

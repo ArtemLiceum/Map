@@ -116,6 +116,8 @@ class EvacPlanViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        if not self.request.user.is_staff:
+            qs = qs.filter(is_active=True)
         # Optional search by title or floor
         search = self.request.query_params.get('search')
         if search:
@@ -594,7 +596,10 @@ class FacilityViewSet(AdminOnlyViewSetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         if self.action == 'retrieve':
-            return qs.prefetch_related('plans')
+            plans_qs = EvacPlan.objects.all()
+            if not self.request.user.is_staff:
+                plans_qs = plans_qs.filter(is_active=True)
+            return qs.prefetch_related(Prefetch('plans', queryset=plans_qs))
         return qs
 
     @action(

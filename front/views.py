@@ -21,7 +21,7 @@ def is_superadmin(user):
 
 
 def main(request):
-    plans = EvacPlan.objects.all()
+    plans = EvacPlan.objects.filter(is_active=True)
     return render(request, "main.html", {"plans": plans})
 
 

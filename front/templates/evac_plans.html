@@ -10,9 +10,7 @@
     position: relative;
 }
 .evac-card .delete-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
+    position: static;
     background: rgba(255,0,0,0.85);
     border: none;
     border-radius: 6px;
@@ -27,6 +25,33 @@
 .evac-card .delete-btn:hover {
     background: rgba(255,0,0,1);
     transform: translateY(-1px);
+}
+.evac-card .admin-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 2;
+}
+.evac-card .toggle-btn {
+    background: rgba(0,0,0,0.65);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+.evac-card .toggle-btn:hover {
+    background: rgba(0,0,0,0.85);
+    transform: translateY(-1px);
+}
+.evac-card .card-title-hidden {
+    opacity: 0.75;
 }
 .create-plan {
     display: flex;
@@ -90,11 +115,34 @@ async function fetchPlans() {
     try {
         const res = await apiFetch('/api/evac_plans/');
         if (!res.ok) throw new Error('Ошибка получения планов');
-        const plans = await res.json();
+        const data = await res.json();
+        const plans = Array.isArray(data) ? data : (data.results || []);
         renderPlans(plans);
     } catch (e) {
         console.error(e);
         plansContainer.innerHTML += '<p>Не удалось загрузить планы.</p>';
+    }
+}
+
+async function togglePlanActive(plan, titleEl, toggleBtn) {
+    const nextActive = !plan.is_active;
+    try {
+        const res = await apiFetch(`/api/evac_plans/${plan.id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: nextActive }),
+        });
+        if (res.status === 403) throw new Error('Нет прав или CSRF-токен отсутствует. Войдите как администратор.');
+        if (!res.ok) throw new Error('Ошибка изменения видимости тура');
+        const updated = await res.json();
+        plan.is_active = updated.is_active;
+        const statusIcon = plan.is_active ? '🟢' : '⚪️';
+        const hiddenLabel = plan.is_active ? '' : ' (скрыт)';
+        titleEl.textContent = `${statusIcon} ${plan.title}${hiddenLabel}`;
+        titleEl.classList.toggle('card-title-hidden', !plan.is_active);
+        toggleBtn.textContent = plan.is_active ? 'Скрыть' : 'Показать';
+    } catch (err) {
+        alert(err.message);
     }
 }
 
@@ -112,18 +160,41 @@ function renderPlans(plans) {
         img.src = plan.image;
         img.alt = plan.title;
         img.className = 'card-img-top';
+        if (!plan.is_active) img.style.opacity = '0.65';
         card.appendChild(img);
 
         const body = document.createElement('div');
         body.className = 'card-body';
         const title = document.createElement('div');
         title.className = 'card-title';
-        title.textContent = plan.title;
+        if (IS_ADMIN) {
+            const statusIcon = plan.is_active ? '🟢' : '⚪️';
+            const hiddenLabel = plan.is_active ? '' : ' (скрыт)';
+            title.textContent = `${statusIcon} ${plan.title}${hiddenLabel}`;
+            if (!plan.is_active) title.classList.add('card-title-hidden');
+        } else {
+            title.textContent = plan.title;
+        }
         body.appendChild(title);
         card.appendChild(body);
 
         if (IS_ADMIN) {
+            const actions = document.createElement('div');
+            actions.className = 'admin-actions';
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'toggle-btn';
+            toggleBtn.textContent = plan.is_active ? 'Скрыть' : 'Показать';
+            toggleBtn.addEventListener('click', async e => {
+                e.stopPropagation();
+                await togglePlanActive(plan, title, toggleBtn);
+                img.style.opacity = plan.is_active ? '1' : '0.65';
+            });
+            actions.appendChild(toggleBtn);
+
             const delBtn = document.createElement('button');
+            delBtn.type = 'button';
             delBtn.className = 'delete-btn';
             delBtn.textContent = '🗑️';
             delBtn.addEventListener('click', async e => {
@@ -138,12 +209,17 @@ function renderPlans(plans) {
                     alert(err.message);
                 }
             });
-            card.appendChild(delBtn);
+            actions.appendChild(delBtn);
+            card.appendChild(actions);
         }
 
         card.addEventListener('click', e => {
-            if (e.target.classList.contains('delete-btn')) return;
-            window.location.href = `/admin/?plan=${plan.id}`;
+            if (e.target.closest('.admin-actions')) return;
+            if (IS_ADMIN) {
+                window.location.href = `/admin/?plan=${plan.id}`;
+                return;
+            }
+            window.location.href = `/tour/${plan.id}/`;
         });
 
         wrapper.appendChild(card);

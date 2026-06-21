@@ -91,6 +91,8 @@ GET /api/evac_plans/
 - `search` (string) - поиск по названию или этажу
 - `floor` (int) - фильтр по этажу
 
+**Видимость:** неавторизованные пользователи и пользователи без `is_staff` получают только планы с `is_active=true`. Администраторы (`is_staff`) видят все планы, включая скрытые.
+
 **Пример ответа (list):**
 ```json
 {
@@ -103,6 +105,7 @@ GET /api/evac_plans/
       "title": "1 этаж, корпус А",
       "floor": 1,
       "image": "/media/evac_plans/plan1.jpg",
+      "is_active": true,
       "points_count": 5,
       "created_at": "2024-01-15T10:30:00Z"
     }
@@ -117,6 +120,7 @@ GET /api/evac_plans/
   "title": "1 этаж, корпус А",
   "floor": 1,
   "image": "/media/evac_plans/plan1.jpg",
+  "is_active": true,
   "created_at": "2024-01-15T10:30:00Z",
   "points": [
     {
@@ -154,6 +158,7 @@ Content-Type: multipart/form-data
   "title": "2 этаж, корпус Б",
   "floor": 2,
   "image": "/media/evac_plans/plan3.jpg",
+  "is_active": true,
   "created_at": "2024-01-20T14:15:00Z"
 }
 ```
@@ -162,6 +167,8 @@ Content-Type: multipart/form-data
 ```http
 GET /api/evac_plans/{id}/
 ```
+
+Для не-staff пользователей неактивный план (`is_active=false`) возвращает **404**.
 
 #### Маршрут по переходам (кратчайший путь по transition-маркерам)
 ```http
@@ -181,8 +188,11 @@ Content-Type: multipart/form-data
 **Параметры:**
 - `title` (string, optional) - новое название
 - `floor` (int, optional) - номер этажа
+- `is_active` (bool, optional) - видимость для обычных пользователей
 - `image` (file, optional) - новое изображение (JPG/PNG/WebP)
 - `crop` (string, optional) - JSON с данными обрезки (можно передать вместе с новым файлом или для обрезки существующего)
+
+Для `is_active` можно использовать `Content-Type: application/json` без загрузки файла.
 
 #### Удалить план
 ```http
@@ -391,6 +401,7 @@ interface EvacPlan {
   title: string;
   floor: number; // этаж
   image: string; // URL to image
+  is_active: boolean; // false — скрыт от обычных пользователей
   created_at: string; // ISO datetime
   points_count?: number; // в list view
   points?: MapPoint[]; // nested в detail view

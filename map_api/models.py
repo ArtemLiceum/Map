@@ -42,6 +42,7 @@ class EvacPlan(models.Model):
         verbose_name="Начальная точка тура",
         help_text="Точка, с которой начинается просмотр. Пусто — первая точка с панорамой.",
     )
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
