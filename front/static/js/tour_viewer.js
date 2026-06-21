@@ -37,6 +37,10 @@
   const minimapRouteSvg = document.getElementById('tvMinimapRoute');
   const tvRouteStart = document.getElementById('tvRouteStart');
   const tvRouteEnd = document.getElementById('tvRouteEnd');
+  const tvRouteStartQuery = document.getElementById('tvRouteStartQuery');
+  const tvRouteEndQuery = document.getElementById('tvRouteEndQuery');
+  const tvRouteStartDropdown = document.getElementById('tvRouteStartDropdown');
+  const tvRouteEndDropdown = document.getElementById('tvRouteEndDropdown');
   const tvRouteBuild = document.getElementById('tvRouteBuild');
   const tvRouteClear = document.getElementById('tvRouteClear');
   const tvRouteStatus = document.getElementById('tvRouteStatus');
@@ -91,6 +95,10 @@
 
   let arrivedToastTimer = null;
   let routeToastTimer = null;
+  const routeComboboxes = {
+    start: { queryEl: tvRouteStartQuery, selectEl: tvRouteStart, dropdownEl: tvRouteStartDropdown, list: [], activeIndex: -1, open: false, blurTimer: null, pointerDownInside: false, suppressFocusOpen: false },
+    end: { queryEl: tvRouteEndQuery, selectEl: tvRouteEnd, dropdownEl: tvRouteEndDropdown, list: [], activeIndex: -1, open: false, blurTimer: null, pointerDownInside: false, suppressFocusOpen: false },
+  };
 
   function routeStorageKey() {
     return state.facilityId ? `facilityRoute:${state.facilityId}` : `tourRoute:${PLAN_ID}`;
@@ -169,11 +177,134 @@
     if (tvRouteStatus) tvRouteStatus.textContent = text || '';
   }
 
+  function normalizeRouteSearch(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function routeTokens(query) {
+    const normalized = normalizeRouteSearch(query);
+    return normalized ? normalized.split(' ').filter(Boolean) : [];
+  }
+
+  function routePointLabel(point) {
+    if (!point) return '';
+    if (state.facilityId) {
+      const floor = point.plan_floor != null ? `этаж ${point.plan_floor}` : 'этаж ?';
+      return `${point.name || `Точка ${point.id}`} — ${point.plan_title || 'План'} (${floor})`;
+    }
+    return point.name || `Точка ${point.id}`;
+  }
+
+  function routePointMeta(point) {
+    const info = (point?.info_text || '').trim();
+    if (!info) return '';
+    return info.length > 90 ? `${info.slice(0, 89).trimEnd()}…` : info;
+  }
+
+  function searchRoutePoints(points, query) {
+    const tokens = routeTokens(query);
+    if (!tokens.length) return points.slice(0, 40).map(p => ({ point: p, score: 0, matchedField: 'name' }));
+    const scored = [];
+    points.forEach((point) => {
+      const nameNorm = normalizeRouteSearch(point?.name || '');
+      const infoNorm = normalizeRouteSearch(point?.info_text || '');
+      const nameHits = tokens.filter(t => nameNorm.includes(t)).length;
+      const infoHits = tokens.filter(t => infoNorm.includes(t)).length;
+      if (!nameHits && !infoHits) return;
+      const allInName = nameHits === tokens.length;
+      const allInInfo = infoHits === tokens.length;
+      const score = (allInName ? 200 : 0) + (allInInfo ? 120 : 0) + nameHits * 10 + infoHits * 4;
+      scored.push({ point, score, matchedField: allInName || nameHits >= infoHits ? 'name' : 'info_text' });
+    });
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return routePointLabel(a.point).localeCompare(routePointLabel(b.point), 'ru');
+    });
+    return scored.slice(0, 40);
+  }
+
+  function closeRouteDropdown(kind) {
+    const combo = routeComboboxes[kind];
+    if (!combo || !combo.dropdownEl) return;
+    combo.open = false;
+    combo.dropdownEl.classList.add('hidden');
+    combo.queryEl?.setAttribute('aria-expanded', 'false');
+  }
+
+  function openRouteDropdown(kind) {
+    const combo = routeComboboxes[kind];
+    if (!combo || !combo.dropdownEl) return;
+    combo.open = true;
+    combo.dropdownEl.classList.remove('hidden');
+    combo.queryEl?.setAttribute('aria-expanded', 'true');
+  }
+
+  function renderRouteDropdown(kind) {
+    const combo = routeComboboxes[kind];
+    if (!combo?.dropdownEl) return;
+    if (!combo.open) {
+      combo.dropdownEl.classList.add('hidden');
+      return;
+    }
+    combo.dropdownEl.innerHTML = '';
+    if (!combo.list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'tv-route-dropdown-empty';
+      empty.textContent = 'Ничего не найдено';
+      combo.dropdownEl.appendChild(empty);
+      return;
+    }
+    combo.list.forEach((item, idx) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `tv-route-option${idx === combo.activeIndex ? ' active' : ''}`;
+      row.dataset.pointId = String(item.point.id);
+      row.dataset.routeCombo = kind;
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', idx === combo.activeIndex ? 'true' : 'false');
+      const title = document.createElement('div');
+      title.className = 'tv-route-option-title';
+      title.textContent = routePointLabel(item.point);
+      row.appendChild(title);
+      if (item.matchedField === 'info_text') {
+        const meta = document.createElement('div');
+        meta.className = 'tv-route-option-meta';
+        meta.textContent = `По тексту: ${routePointMeta(item.point) || 'без описания'}`;
+        row.appendChild(meta);
+      }
+      combo.dropdownEl.appendChild(row);
+    });
+  }
+
+  function selectRoutePoint(kind, pointId, { updateQuery = true, closeDropdown = true } = {}) {
+    const combo = routeComboboxes[kind];
+    if (!combo?.selectEl) return;
+    const id = Number(pointId);
+    if (!Number.isFinite(id)) return;
+    if (![...combo.selectEl.options].some(o => Number(o.value) === id)) return;
+    combo.selectEl.value = String(id);
+    if (updateQuery) {
+      const sourceList = state.facilityId && state.facility?.points?.length ? state.facility.points : state.points;
+      const found = sourceList.find(p => Number(p.id) === id);
+      if (combo.queryEl && found) combo.queryEl.value = routePointLabel(found);
+    }
+    if (closeDropdown) closeRouteDropdown(kind);
+  }
+
+  function updateRouteSearchResults(kind) {
+    const combo = routeComboboxes[kind];
+    if (!combo) return;
+    const sourceList = state.facilityId && state.facility?.points?.length ? state.facility.points : state.points;
+    combo.list = searchRoutePoints(sourceList, combo.queryEl?.value || '');
+    combo.activeIndex = combo.list.length ? 0 : -1;
+    renderRouteDropdown(kind);
+  }
+
   function syncRouteStartSelectFromActive() {
     if (!tvRouteStart || state.activePointId == null) return;
     const v = String(state.activePointId);
     if ([...tvRouteStart.options].some(o => o.value === v)) {
-      tvRouteStart.value = v;
+      selectRoutePoint('start', Number(v), { updateQuery: true, closeDropdown: false });
     }
   }
 
@@ -329,12 +460,7 @@
     list.forEach(p => {
       const o1 = document.createElement('option');
       o1.value = String(p.id);
-      if (state.facilityId) {
-        const floor = p.plan_floor != null ? `этаж ${p.plan_floor}` : 'этаж ?';
-        o1.textContent = `${p.name || `Точка ${p.id}`} — ${p.plan_title || 'План'} (${floor})`;
-      } else {
-        o1.textContent = p.name || `Точка ${p.id}`;
-      }
+      o1.textContent = routePointLabel(p);
       tvRouteStart.appendChild(o1.cloneNode(true));
       tvRouteEnd.appendChild(o1);
     });
@@ -352,6 +478,12 @@
       const other = list.find(p => p.id !== startNum) || list[0];
       tvRouteEnd.value = String(other.id);
     }
+    const startVal = Number(tvRouteStart.value);
+    const endVal = Number(tvRouteEnd.value);
+    if (Number.isFinite(startVal)) selectRoutePoint('start', startVal, { updateQuery: true, closeDropdown: false });
+    if (Number.isFinite(endVal)) selectRoutePoint('end', endVal, { updateQuery: true, closeDropdown: false });
+    updateRouteSearchResults('start');
+    updateRouteSearchResults('end');
   }
 
   /**
@@ -769,6 +901,7 @@
             allPoints.push({
               id: Number(pt.id),
               name: pt.name || `Точка ${pt.id}`,
+              info_text: pt.info_text || '',
               plan_id: pid,
               plan_title: plan.title || `План ${pid}`,
               plan_floor: Number.isFinite(Number(plan.floor)) ? Number(plan.floor) : null
@@ -856,6 +989,16 @@
     setLoader('', false);
   }
 
+  function resolveTargetPointInfoText(marker) {
+    const targetId = marker?.target_point != null ? Number(marker.target_point) : NaN;
+    if (Number.isFinite(targetId)) {
+      const local = state.points.find(p => Number(p.id) === targetId);
+      const localText = (local?.info_text || '').trim();
+      if (localText) return localText;
+    }
+    return (marker?.target_point_info_text || '').trim();
+  }
+
   function buildNavMarkers(markers) {
     markersLayer.innerHTML = '';
     let effectiveMarkers = state.selectedTourId
@@ -878,18 +1021,19 @@
       el.className = 'tv-nav-marker' + (isInfo ? ' is-info' : '');
       el.type = 'button';
 
-      const transitionLabel = (m.label || '').trim();
-
-      if (!isInfo && transitionLabel) {
-        const tip = document.createElement('span');
-        tip.className = 'tv-nav-marker-tooltip';
-        tip.textContent = transitionLabel;
-        tip.setAttribute('role', 'tooltip');
-        el.appendChild(tip);
+      if (!isInfo) {
+        const targetInfoText = resolveTargetPointInfoText(m);
+        if (targetInfoText) {
+          const tip = document.createElement('span');
+          tip.className = 'tv-nav-marker-tooltip';
+          tip.textContent = targetInfoText;
+          tip.setAttribute('role', 'tooltip');
+          el.appendChild(tip);
+        }
       }
       el.setAttribute('aria-label', isInfo
         ? (m.label || 'Информация')
-        : (transitionLabel || m.target_point_name || 'Переход'));
+        : (m.target_point_name || 'Переход'));
       el.dataset.markerId = String(m.id);
 
       // Click handled separately to avoid drag interference
@@ -1125,8 +1269,16 @@
       btn.style.left = `${p.x}%`;
       btn.style.top = `${p.y}%`;
       btn.type = 'button';
-      btn.title = p.name || 'Точка';
+      btn.setAttribute('aria-label', p.name || 'Точка');
       btn.dataset.pointId = String(p.id);
+      const infoText = (p.info_text || '').trim();
+      if (infoText) {
+        const tip = document.createElement('span');
+        tip.className = 'tv-minimap-point-tooltip';
+        tip.textContent = infoText;
+        tip.setAttribute('role', 'tooltip');
+        btn.appendChild(tip);
+      }
       btn.addEventListener('click', () => {
         validateMinimapAgainstRoute(p.id);
         switchToPoint(p.id);
@@ -1272,6 +1424,88 @@
     });
 
     tvRoutePanelClose?.addEventListener('click', () => setRoutePanelVisible(false));
+
+    const bindRouteCombobox = (kind) => {
+      const combo = routeComboboxes[kind];
+      if (!combo?.queryEl || !combo?.dropdownEl || !combo?.selectEl) return;
+      combo.queryEl.addEventListener('focus', (e) => {
+        if (combo.blurTimer) {
+          clearTimeout(combo.blurTimer);
+          combo.blurTimer = null;
+        }
+        if (combo.suppressFocusOpen || !e.isTrusted) {
+          combo.suppressFocusOpen = false;
+          return;
+        }
+        openRouteDropdown(kind);
+        updateRouteSearchResults(kind);
+      });
+      combo.queryEl.addEventListener('input', () => {
+        openRouteDropdown(kind);
+        updateRouteSearchResults(kind);
+      });
+      combo.queryEl.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (!combo.open) openRouteDropdown(kind);
+          if (!combo.list.length) {
+            updateRouteSearchResults(kind);
+            return;
+          }
+          combo.activeIndex = (combo.activeIndex + 1 + combo.list.length) % combo.list.length;
+          renderRouteDropdown(kind);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (!combo.open) openRouteDropdown(kind);
+          if (!combo.list.length) {
+            updateRouteSearchResults(kind);
+            return;
+          }
+          combo.activeIndex = (combo.activeIndex - 1 + combo.list.length) % combo.list.length;
+          renderRouteDropdown(kind);
+          return;
+        }
+        if (e.key === 'Enter') {
+          if (combo.open && combo.activeIndex >= 0 && combo.list[combo.activeIndex]) {
+            e.preventDefault();
+            selectRoutePoint(kind, combo.list[combo.activeIndex].point.id, { updateQuery: true, closeDropdown: true });
+          }
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeRouteDropdown(kind);
+        }
+      });
+      combo.queryEl.addEventListener('blur', () => {
+        combo.blurTimer = setTimeout(() => {
+          if (!combo.pointerDownInside) {
+            closeRouteDropdown(kind);
+          }
+          combo.pointerDownInside = false;
+        }, 120);
+      });
+      combo.dropdownEl.addEventListener('pointerdown', () => {
+        combo.pointerDownInside = true;
+      });
+      combo.dropdownEl.addEventListener('click', (e) => {
+        const row = e.target.closest('button[data-point-id]');
+        if (!row || !combo.dropdownEl.contains(row)) return;
+        const pid = Number(row.dataset.pointId);
+        if (!Number.isFinite(pid)) return;
+        selectRoutePoint(kind, pid, { updateQuery: true, closeDropdown: true });
+        combo.suppressFocusOpen = true;
+        combo.queryEl.focus();
+      });
+      combo.selectEl.addEventListener('change', () => {
+        const pid = Number(combo.selectEl.value);
+        selectRoutePoint(kind, pid, { updateQuery: true, closeDropdown: false });
+      });
+    };
+    bindRouteCombobox('start');
+    bindRouteCombobox('end');
 
     tvRouteBuild?.addEventListener('click', () => onRouteBuildClick());
     tvRouteClear?.addEventListener('click', () => clearRoute());

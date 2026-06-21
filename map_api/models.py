@@ -76,7 +76,6 @@ class MapPoint(models.Model):
         blank=True,
         default='',
         verbose_name="Информационный текст",
-        help_text="Текст для info-точки (отображается при наведении)"
     )
 
     class Meta:

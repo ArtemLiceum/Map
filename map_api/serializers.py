@@ -7,6 +7,7 @@ from .models import EvacPlan, Facility, MapPoint, Panorama, PanoramaMarker, Tour
 class PanoramaMarkerSerializer(serializers.ModelSerializer):
     target_point_name = serializers.SerializerMethodField()
     target_plan_id = serializers.SerializerMethodField()
+    target_point_info_text = serializers.SerializerMethodField()
     tours = serializers.PrimaryKeyRelatedField(
         many=True,
         required=False,
@@ -18,7 +19,7 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
         model = PanoramaMarker
         fields = [
             'id', 'panorama', 'target_point', 'target_point_name',
-            'target_plan_id',
+            'target_plan_id', 'target_point_info_text',
             'azimuth', 'pitch', 'entry_azimuth', 'label', 'type', 'text', 'tours'
         ]
 
@@ -27,6 +28,9 @@ class PanoramaMarkerSerializer(serializers.ModelSerializer):
 
     def get_target_plan_id(self, obj):
         return obj.target_point.plan_id if obj.target_point else None
+
+    def get_target_point_info_text(self, obj):
+        return (obj.target_point.info_text or '') if obj.target_point else ''
 
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)

@@ -231,6 +231,65 @@ h1 { font-size: 20px; }
   min-height: 120px;
 }
 
+.target-point-combobox {
+  position: relative;
+}
+
+.target-point-select-hidden {
+  display: none;
+}
+
+.target-point-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.15);
+  z-index: 10;
+}
+
+.target-point-option {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.target-point-option:last-child {
+  border-bottom: 0;
+}
+
+.target-point-option:hover,
+.target-point-option.active {
+  background: #eff6ff;
+}
+
+.target-point-option-title {
+  font-size: 13px;
+  color: #111827;
+  line-height: 1.35;
+}
+
+.target-point-option-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.target-point-dropdown-empty {
+  padding: 10px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 /* --- Entry azimuth visual picker --- */
 .visually-hidden {
   position: absolute;

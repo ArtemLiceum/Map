@@ -17,6 +17,7 @@ const planTitle = document.getElementById('planTitle');
 const planUpload = document.getElementById('planUpload');
 const pointModal = document.getElementById('pointModal');
 const pointName = document.getElementById('pointName');
+const pointInfoText = document.getElementById('pointInfoText');
 const panoramaUpload = document.getElementById('panoramaUpload');
 const savePointBtn = document.getElementById('savePointBtn');
 const cancelPointBtn = document.getElementById('cancelPointBtn');
@@ -34,7 +35,8 @@ const markerTransitionFields = document.getElementById('markerTransitionFields')
 const markerInfoFields = document.getElementById('markerInfoFields');
 const markerLabel = document.getElementById('markerLabel');
 const targetPlanSelect = document.getElementById('targetPlanSelect');
-const targetSearch = document.getElementById('targetSearch');
+const targetPointQuery = document.getElementById('targetPointQuery');
+const targetPointDropdown = document.getElementById('targetPointDropdown');
 const targetPointSelect = document.getElementById('targetPointSelect');
 const infoLabel = document.getElementById('infoLabel');
 const infoText = document.getElementById('infoText');
@@ -158,11 +160,11 @@ async function uploadPlan(file, title = null, crop = null) {
   return await res.json();
 }
 
-async function createPoint(planId, name, x, y) {
+async function createPoint(planId, name, x, y, infoText = '') {
   const res = await apiFetch(API.createPoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan: planId, name, x, y })
+    body: JSON.stringify({ plan: planId, name, x, y, info_text: infoText })
   });
   if (!res.ok) throw new Error('Ошибка создания точки');
   return await res.json();
@@ -698,6 +700,7 @@ planWrap.addEventListener('click', e => {
 function openPointModal(point = null) {
   editingPoint = point;
   pointName.value = point ? point.name : '';
+  if (pointInfoText) pointInfoText.value = point?.info_text || '';
   panoramaUpload.value = '';
   document.getElementById('pointModalTitle').innerText = point ? 'Редактировать точку' : 'Новая точка';
   pointModal.style.display = 'flex';
@@ -707,6 +710,7 @@ cancelPointBtn.addEventListener('click', () => { pointModal.style.display = 'non
 
 savePointBtn.addEventListener('click', async () => {
   const name = pointName.value.trim() || 'Точка';
+  const infoText = (pointInfoText?.value || '').trim();
   if(editingPoint){
     // Persist point changes to server (previously it updated only UI/LocalStorage)
     try {
@@ -714,7 +718,7 @@ savePointBtn.addEventListener('click', async () => {
         name,
         x: editingPoint.x,
         y: editingPoint.y,
-        info_text: editingPoint.info_text ?? ''
+        info_text: infoText
       });
       editingPoint.name = updated.name;
       editingPoint.x = updated.x;
@@ -742,8 +746,15 @@ savePointBtn.addEventListener('click', async () => {
     saveState(); renderAll(); pointModal.style.display = 'none'; return;
   }
   const planId = state.plan.id; if(!planId) return alert('Сначала нужно добавить план');
-  const pointData = await createPoint(planId, name, tempPointCoords.x, tempPointCoords.y);
-  const point = { id: pointData.id, name: pointData.name, x: pointData.x, y: pointData.y, panorama: null };
+  const pointData = await createPoint(planId, name, tempPointCoords.x, tempPointCoords.y, infoText);
+  const point = {
+    id: pointData.id,
+    name: pointData.name,
+    x: pointData.x,
+    y: pointData.y,
+    info_text: pointData.info_text ?? '',
+    panorama: null
+  };
   if(panoramaUpload.files.length){
     try {
       const { file: croppedFile, crop } = await openCropperDialog({
@@ -780,7 +791,7 @@ function renderAll() {
     const el = document.createElement('div');
     el.className = 'marker';
     el.dataset.id = pt.id;
-    el.title = pt.name;
+    el.title = (pt.info_text || '').trim() || pt.name;
     el.innerText = '📍';
     el.style.left = pt.x+'%';
     el.style.top = pt.y+'%';
@@ -1122,8 +1133,13 @@ async function openPanorama(point){
   const currentFacilityId = state.plan?.facility_id ?? null;
   let markerTargetPlans = [];
   let markerTargetPlanId = Number.isFinite(currentPlanId) ? currentPlanId : null;
-  let markerTargetPoints = []; // [{id,name,has_panorama,panorama_image}]
+  let markerTargetPoints = []; // [{id,name,info_text,has_panorama,panorama_image}]
   let currentEntryAzimuth = null; // null = auto, number = explicit angle
+  let targetPointSearchResults = [];
+  let targetPointActiveIndex = -1;
+  let targetPointDropdownOpen = false;
+  let targetPointBlurTimer = null;
+  let targetPointPointerDownInDropdown = false;
 
   function setTargetPointsSelectLoading() {
     if (!targetPointSelect) return;
@@ -1207,6 +1223,7 @@ async function openPanorama(point){
       markerTargetPoints = (pts || []).map(pt => ({
         id: pt.id,
         name: pt.name,
+        info_text: pt.info_text || '',
         has_panorama: !!pt.panorama,
         panorama_image: pt.panorama?.image || null,
       }));
@@ -1225,6 +1242,12 @@ async function openPanorama(point){
     renderTargetPlanSelect(effectivePlanId);
     await loadTargetPointsForPlan(effectivePlanId);
     populateTargetPointsSelect(selectedPointId);
+    if (Number.isFinite(Number(selectedPointId))) {
+      selectTargetPoint(Number(selectedPointId), { updateQuery: true, closeDropdown: true });
+    } else if (targetPointQuery) {
+      targetPointQuery.value = '';
+      updateTargetPointSearchResults();
+    }
   }
 
   if(!point.panorama.markers || !point.panorama.markers.length){
@@ -1387,29 +1410,172 @@ async function openPanorama(point){
     markerInfoFields.classList.toggle('hidden', isTransition);
   }
 
-  function populateTargetPointsSelect(selectedId = null) {
-    const query = (targetSearch.value || '').trim().toLowerCase();
-    const currentSelection = Number.isFinite(selectedId) ? selectedId : parseInt(targetPointSelect.value, 10);
-    const points = (markerTargetPoints || []).filter(p => {
-      if (!query) return true;
-      return (p.name || '').toLowerCase().includes(query);
-    });
-    targetPointSelect.innerHTML = '';
+  function normalizeSearchValue(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
 
+  function tokenizeSearchQuery(query) {
+    const normalized = normalizeSearchValue(query);
+    return normalized ? normalized.split(' ').filter(Boolean) : [];
+  }
+
+  function cutTextSnippet(value, maxLen = 90) {
+    const src = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!src) return '';
+    if (src.length <= maxLen) return src;
+    return `${src.slice(0, maxLen - 1).trimEnd()}…`;
+  }
+
+  function getTargetPointMatch(point, tokens) {
+    if (!tokens.length) {
+      return { score: 0, matchedField: 'name' };
+    }
+    const nameNorm = normalizeSearchValue(point?.name || '');
+    const infoNorm = normalizeSearchValue(point?.info_text || '');
+    const nameHits = tokens.filter(token => nameNorm.includes(token)).length;
+    const infoHits = tokens.filter(token => infoNorm.includes(token)).length;
+    if (!nameHits && !infoHits) return null;
+
+    const allInName = nameHits === tokens.length;
+    const allInInfo = infoHits === tokens.length;
+    const score =
+      (allInName ? 200 : 0)
+      + (allInInfo ? 120 : 0)
+      + nameHits * 10
+      + infoHits * 4;
+
+    return {
+      score,
+      matchedField: allInName || nameHits >= infoHits ? 'name' : 'info_text',
+    };
+  }
+
+  function searchTargetPoints(query) {
+    const tokens = tokenizeSearchQuery(query);
+    const points = markerTargetPoints || [];
+    const results = [];
+
+    points.forEach(pointItem => {
+      const match = getTargetPointMatch(pointItem, tokens);
+      if (!match) return;
+      results.push({
+        point: pointItem,
+        score: match.score,
+        matchedField: match.matchedField,
+      });
+    });
+
+    results.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return String(a.point?.name || '').localeCompare(String(b.point?.name || ''), 'ru');
+    });
+    return results.slice(0, 30);
+  }
+
+  function closeTargetPointDropdown() {
+    targetPointDropdownOpen = false;
+    if (targetPointDropdown) {
+      targetPointDropdown.classList.add('hidden');
+      targetPointDropdown.innerHTML = '';
+    }
+    if (targetPointQuery) targetPointQuery.setAttribute('aria-expanded', 'false');
+  }
+
+  function openTargetPointDropdown() {
+    targetPointDropdownOpen = true;
+    if (targetPointDropdown) targetPointDropdown.classList.remove('hidden');
+    if (targetPointQuery) targetPointQuery.setAttribute('aria-expanded', 'true');
+  }
+
+  function renderTargetPointDropdown() {
+    if (!targetPointDropdown) return;
+    if (!targetPointDropdownOpen) {
+      targetPointDropdown.classList.add('hidden');
+      return;
+    }
+
+    targetPointDropdown.innerHTML = '';
+    if (!targetPointSearchResults.length) {
+      const empty = document.createElement('div');
+      empty.className = 'target-point-dropdown-empty';
+      empty.textContent = 'Ничего не найдено';
+      targetPointDropdown.appendChild(empty);
+      return;
+    }
+
+    targetPointSearchResults.forEach((item, idx) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `target-point-option${idx === targetPointActiveIndex ? ' active' : ''}`;
+      row.dataset.pointId = String(item.point.id);
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', idx === targetPointActiveIndex ? 'true' : 'false');
+
+      const warn = item.point.has_panorama ? '' : ' ⚠️ нет панорамы';
+      const title = document.createElement('div');
+      title.className = 'target-point-option-title';
+      title.textContent = item.point.name
+        ? `${item.point.name}${warn} (ID: ${item.point.id})`
+        : `Точка ${item.point.id}${warn}`;
+      row.appendChild(title);
+
+      if (item.matchedField === 'info_text') {
+        const meta = document.createElement('div');
+        meta.className = 'target-point-option-meta';
+        meta.textContent = `По тексту: ${cutTextSnippet(item.point.info_text) || 'без описания'}`;
+        row.appendChild(meta);
+      }
+      targetPointDropdown.appendChild(row);
+    });
+  }
+
+  function updateTargetPointSearchResults() {
+    targetPointSearchResults = searchTargetPoints(targetPointQuery?.value || '');
+    if (!targetPointSearchResults.length) {
+      targetPointActiveIndex = -1;
+    } else if (targetPointActiveIndex < 0 || targetPointActiveIndex >= targetPointSearchResults.length) {
+      targetPointActiveIndex = 0;
+    }
+    renderTargetPointDropdown();
+  }
+
+  function populateTargetPointsSelect(selectedId = null) {
+    const fallbackSelection = parseInt(targetPointSelect?.value || '', 10);
+    const currentSelection = Number.isFinite(Number(selectedId))
+      ? Number(selectedId)
+      : (Number.isFinite(fallbackSelection) ? fallbackSelection : null);
+
+    if (!targetPointSelect) return;
+    targetPointSelect.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = points.length ? 'Выберите точку' : 'Нет подходящих точек';
+    placeholder.textContent = markerTargetPoints.length ? 'Выберите точку' : 'Нет доступных точек';
     targetPointSelect.appendChild(placeholder);
 
-    points.forEach(p => {
+    markerTargetPoints.forEach(p => {
       const option = document.createElement('option');
       option.value = String(p.id);
       const warn = p.has_panorama ? '' : ' ⚠️ нет панорамы';
       option.textContent = p.name ? `${p.name}${warn} (ID: ${p.id})` : `Точка ${p.id}${warn}`;
-      if (p.id === currentSelection) option.selected = true;
+      if (Number.isFinite(currentSelection) && Number(p.id) === Number(currentSelection)) {
+        option.selected = true;
+      }
       targetPointSelect.appendChild(option);
     });
     refreshEntryAzimuthPicker();
+    updateTargetPointSearchResults();
+  }
+
+  function selectTargetPoint(pointId, options = {}) {
+    const { updateQuery = true, closeDropdown = true } = options;
+    const normalizedId = Number(pointId);
+    if (!Number.isFinite(normalizedId)) return;
+    const selectedPoint = markerTargetPoints.find(p => Number(p.id) === normalizedId);
+    if (!selectedPoint) return;
+    if (targetPointSelect) targetPointSelect.value = String(normalizedId);
+    if (updateQuery && targetPointQuery) targetPointQuery.value = selectedPoint.name || '';
+    refreshEntryAzimuthPicker();
+    if (closeDropdown) closeTargetPointDropdown();
   }
 
   function populateInfoToursSelect(selectedTours = []) {
@@ -1446,7 +1612,8 @@ async function openPanorama(point){
 
     markerType.value = 'transition';
     markerLabel.value = '';
-    targetSearch.value = '';
+    if (targetPointQuery) targetPointQuery.value = '';
+    closeTargetPointDropdown();
     resetEntryAzimuth();
     void setTargetPlan(currentPlanId, null);
 
@@ -1472,7 +1639,8 @@ async function openPanorama(point){
 
     markerType.value = marker.type || 'transition';
     markerLabel.value = marker.label || '';
-    targetSearch.value = '';
+    if (targetPointQuery) targetPointQuery.value = '';
+    closeTargetPointDropdown();
     const planForTarget = marker.target_plan_id || currentPlanId;
     void setTargetPlan(planForTarget, marker.target_point || null);
 
@@ -1524,12 +1692,75 @@ async function openPanorama(point){
   markerType.onchange = () => {
     updateMarkerTypeFieldsVisibility();
   };
-  targetSearch.oninput = () => {
-    populateTargetPointsSelect();
-  };
+  targetPointQuery && (targetPointQuery.onfocus = () => {
+    if (targetPointBlurTimer) {
+      clearTimeout(targetPointBlurTimer);
+      targetPointBlurTimer = null;
+    }
+    openTargetPointDropdown();
+    updateTargetPointSearchResults();
+  });
+  targetPointQuery && (targetPointQuery.oninput = () => {
+    openTargetPointDropdown();
+    updateTargetPointSearchResults();
+  });
+  targetPointQuery && (targetPointQuery.onkeydown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!targetPointDropdownOpen) openTargetPointDropdown();
+      if (targetPointSearchResults.length) {
+        targetPointActiveIndex = (targetPointActiveIndex + 1 + targetPointSearchResults.length) % targetPointSearchResults.length;
+        renderTargetPointDropdown();
+      } else {
+        updateTargetPointSearchResults();
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!targetPointDropdownOpen) openTargetPointDropdown();
+      if (targetPointSearchResults.length) {
+        targetPointActiveIndex = (targetPointActiveIndex - 1 + targetPointSearchResults.length) % targetPointSearchResults.length;
+        renderTargetPointDropdown();
+      } else {
+        updateTargetPointSearchResults();
+      }
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (targetPointDropdownOpen && targetPointActiveIndex >= 0 && targetPointSearchResults[targetPointActiveIndex]) {
+        e.preventDefault();
+        selectTargetPoint(targetPointSearchResults[targetPointActiveIndex].point.id, { updateQuery: true, closeDropdown: true });
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeTargetPointDropdown();
+    }
+  });
+  targetPointQuery && (targetPointQuery.onblur = () => {
+    targetPointBlurTimer = setTimeout(() => {
+      if (!targetPointPointerDownInDropdown) {
+        closeTargetPointDropdown();
+      }
+      targetPointPointerDownInDropdown = false;
+    }, 120);
+  });
   targetPlanSelect && (targetPlanSelect.onchange = () => {
     const pid = parseInt(targetPlanSelect.value, 10);
     void setTargetPlan(pid, null);
+  });
+  targetPointDropdown && (targetPointDropdown.onpointerdown = () => {
+    targetPointPointerDownInDropdown = true;
+  });
+  targetPointDropdown && (targetPointDropdown.onclick = (e) => {
+    const row = clickEventTargetElement(e)?.closest('button[data-point-id]');
+    if (!row || !targetPointDropdown.contains(row)) return;
+    const pid = parseInt(row.dataset.pointId || '', 10);
+    if (!Number.isFinite(pid)) return;
+    selectTargetPoint(pid, { updateQuery: true, closeDropdown: true });
+    targetPointQuery?.focus();
   });
   markerCancelBtn.onclick = closeMarkerModal;
 
@@ -1590,8 +1821,11 @@ async function openPanorama(point){
   // Кнопка «Сбросить»
   entryAzimuthReset?.addEventListener('click', () => resetEntryAzimuth());
 
-  // Смена целевой точки → обновить пикер
-  targetPointSelect?.addEventListener('change', () => refreshEntryAzimuthPicker());
+  // Смена целевой точки → синхронизировать текст поиска и обновить пикер
+  targetPointSelect && (targetPointSelect.onchange = () => {
+    const selectedId = parseInt(targetPointSelect.value || '', 10);
+    selectTargetPoint(selectedId, { updateQuery: true, closeDropdown: false });
+  });
 
   markerSaveBtn.onclick = async () => {
     if (!markerDraft) return;
