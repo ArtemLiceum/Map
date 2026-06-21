@@ -14,6 +14,7 @@
   const IS_FACILITY_MODE = Number.isFinite(FACILITY_ID);
 
   const panoramaEl = document.getElementById('tvPanoramaImage');
+  const panoramaFadeEl = document.getElementById('tvPanoramaImageFade');
   const markersLayer = document.getElementById('tvNavMarkers');
   const fadeEl = document.getElementById('tvFade');
   const loaderEl = document.getElementById('tvLoader');
@@ -58,6 +59,8 @@
   const MINIMAP_MAX_DEFAULT = 440;
   const MINIMAP_MAX_MOBILE = 360;
   const MINIMAP_ZOOM_LEVELS = [1, 1.5, 2];
+  const IMAGE_CACHE_LIMIT = 10;
+  const PREFETCH_NEIGHBORS_LIMIT = 4;
 
   const state = {
     plan: null,
@@ -99,6 +102,91 @@
     start: { queryEl: tvRouteStartQuery, selectEl: tvRouteStart, dropdownEl: tvRouteStartDropdown, list: [], activeIndex: -1, open: false, blurTimer: null, pointerDownInside: false, suppressFocusOpen: false },
     end: { queryEl: tvRouteEndQuery, selectEl: tvRouteEnd, dropdownEl: tvRouteEndDropdown, list: [], activeIndex: -1, open: false, blurTimer: null, pointerDownInside: false, suppressFocusOpen: false },
   };
+  const imageCache = new Map();
+  const inflightImageLoads = new Map();
+
+  function cacheImage(url, img) {
+    if (!url || !img) return;
+    if (imageCache.has(url)) {
+      imageCache.delete(url);
+    }
+    imageCache.set(url, img);
+    if (imageCache.size <= IMAGE_CACHE_LIMIT) return;
+    const oldestUrl = imageCache.keys().next().value;
+    if (oldestUrl) imageCache.delete(oldestUrl);
+  }
+
+  function preloadImage(url) {
+    if (!url) return Promise.reject(new Error('Пустой URL панорамы'));
+    const cached = imageCache.get(url);
+    if (cached) return Promise.resolve(cached);
+    const existing = inflightImageLoads.get(url);
+    if (existing) return existing;
+
+    const promise = new Promise((resolve, reject) => {
+      const img = new Image();
+      try {
+        img.decoding = 'async';
+      } catch (_) {
+        /* decoding is optional */
+      }
+      img.onload = () => {
+        cacheImage(url, img);
+        resolve(img);
+      };
+      img.onerror = () => reject(new Error('Не удалось загрузить панораму'));
+      img.src = url;
+    }).finally(() => {
+      inflightImageLoads.delete(url);
+    });
+
+    inflightImageLoads.set(url, promise);
+    return promise;
+  }
+
+  function scheduleIdleTask(callback) {
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(callback, { timeout: 500 });
+      return;
+    }
+    setTimeout(callback, 0);
+  }
+
+  function getPointPanoramaUrl(pointId) {
+    const id = Number(pointId);
+    if (!Number.isFinite(id)) return null;
+    const point = state.points.find(p => Number(p.id) === id);
+    const url = point?.panorama?.image || null;
+    return typeof url === 'string' && url ? url : null;
+  }
+
+  function prefetchPointPanorama(pointId) {
+    const url = getPointPanoramaUrl(pointId);
+    if (!url) return;
+    preloadImage(url).catch(() => {});
+  }
+
+  function prefetchNeighbors(point) {
+    if (!point?.panorama?.markers?.length) return;
+    const urls = [];
+    const seen = new Set();
+    for (const marker of point.panorama.markers) {
+      if (marker?.type !== 'transition') continue;
+      const targetId = Number(marker.target_point);
+      if (!Number.isFinite(targetId)) continue;
+      const url = getPointPanoramaUrl(targetId);
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      urls.push(url);
+      if (urls.length >= PREFETCH_NEIGHBORS_LIMIT) break;
+    }
+    if (!urls.length) return;
+    scheduleIdleTask(() => {
+      urls.forEach((url) => {
+        preloadImage(url).catch(() => {});
+      });
+    });
+  }
 
   function routeStorageKey() {
     return state.facilityId ? `facilityRoute:${state.facilityId}` : `tourRoute:${PLAN_ID}`;
@@ -725,6 +813,9 @@
     state.plan = plan;
     state.points = Array.isArray(plan.points) ? plan.points : [];
     state.activePointId = pickInitialPointId(state.points);
+    if (state.activePointId != null) {
+      prefetchPointPanorama(state.activePointId);
+    }
     populateRouteSelects();
     renderMinimap();
     tryRestoreRouteFromStorage();
@@ -922,15 +1013,6 @@
     }
   }
 
-  function loadImage(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = url;
-    });
-  }
-
   async function loadScene(pointId, entryAzimuth = null) {
     const point = state.points.find(p => p.id === pointId);
     if (!point) {
@@ -943,9 +1025,9 @@
       setLoader('Для точки нет панорамы', true);
       return;
     }
-    toggleFade(true);
+    const prevPanoUrl = state.panoUrl;
     setLoader('Загрузка панорамы...', true);
-    const img = await loadImage(pano.image);
+    const img = await preloadImage(pano.image);
 
     const prevActiveId = state.activePointId;
     state.activePointId = pointId;
@@ -967,10 +1049,23 @@
       : 0;
     state.velocity = 0;
 
+    if (panoramaFadeEl) {
+      if (prevPanoUrl && prevPanoUrl !== pano.image) {
+        panoramaFadeEl.style.backgroundImage = `url(${prevPanoUrl})`;
+        panoramaFadeEl.style.opacity = '1';
+        requestAnimationFrame(() => {
+          panoramaFadeEl.style.opacity = '0';
+        });
+      } else {
+        panoramaFadeEl.style.backgroundImage = '';
+        panoramaFadeEl.style.opacity = '0';
+      }
+    }
     panoramaEl.style.backgroundImage = `url(${pano.image})`;
     scheduleRender();
 
     buildNavMarkers(pano.markers || []);
+    prefetchNeighbors(point);
 
     applyRouteNavHighlights();
     processPendingRouteNav();
@@ -985,7 +1080,7 @@
 
     highlightMinimap(pointId);
     syncRouteStartSelectFromActive();
-    setTimeout(() => toggleFade(false), 50);
+    toggleFade(false);
     setLoader('', false);
   }
 
@@ -1119,6 +1214,9 @@
     const w = state.tileWidth || 1;
     const offsetMod = ((state.offsetPx % w) + w) % w;
     panoramaEl.style.backgroundPosition = `${-offsetMod}px 50%`;
+    if (panoramaFadeEl) {
+      panoramaFadeEl.style.backgroundPosition = `${-offsetMod}px 50%`;
+    }
     updateMarkersPosition(offsetMod);
   }
 
@@ -1393,6 +1491,22 @@
         }
 
         switchToPoint(targetId, entryAzimuth);
+      }
+    });
+    markersLayer.addEventListener('pointerenter', (e) => {
+      const marker = e.target.closest('.tv-nav-marker');
+      if (!marker || !markersLayer.contains(marker)) return;
+      prefetchPointPanorama(marker.dataset.targetPoint);
+    }, true);
+    markersLayer.addEventListener('focusin', (e) => {
+      const marker = e.target.closest('.tv-nav-marker');
+      if (!marker || !markersLayer.contains(marker)) return;
+      prefetchPointPanorama(marker.dataset.targetPoint);
+    });
+    panoramaFadeEl?.addEventListener('transitionend', (e) => {
+      if (e.propertyName !== 'opacity') return;
+      if (panoramaFadeEl.style.opacity === '0') {
+        panoramaFadeEl.style.backgroundImage = '';
       }
     });
 

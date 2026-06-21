@@ -2,6 +2,7 @@ function mountTourViewerDom(extra = "") {
   document.body.innerHTML = `
     <div id="tvPanorama">
       <div id="tvPanoramaImage"></div>
+      <div id="tvPanoramaImageFade"></div>
       <div id="tvNavMarkers"></div>
     </div>
     <div id="tvFade"></div>

@@ -35,6 +35,12 @@
   transition: background-image 0.35s ease;
 }
 
+.tv-panorama-image-fade {
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
 .tv-nav-markers {
   position: absolute;
   inset: 0;
