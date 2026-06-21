@@ -110,8 +110,7 @@ jobs:
               -e media \
               -e staticfiles \
               -e deploy/CREDENTIALS.local.txt
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            git reset --hard "origin/$BRANCH"
+            git checkout -f -B "$BRANCH" "origin/$BRANCH"
             if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]; then
               echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u ArtemLiceum --password-stdin
             fi
