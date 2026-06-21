@@ -115,6 +115,64 @@
   transform: translate(-50%, -50%) scale(0.95);
 }
 
+.tv-nav-marker-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  max-width: min(240px, 70vw);
+  padding: 7px 12px;
+  background: rgba(17, 24, 39, 0.94);
+  color: #f5f6f8;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+  z-index: 2;
+}
+
+.tv-nav-marker-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(17, 24, 39, 0.94);
+  transition: border-top-color 0.12s ease;
+}
+
+.tv-nav-marker:hover .tv-nav-marker-tooltip,
+.tv-nav-marker:focus-visible .tv-nav-marker-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tv-nav-marker:hover .tv-nav-marker-tooltip {
+  background: rgba(37, 99, 235, 0.96);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.35);
+}
+
+.tv-nav-marker:hover .tv-nav-marker-tooltip::after {
+  border-top-color: rgba(37, 99, 235, 0.96);
+}
+
 .tv-loader {
   position: absolute;
   top: 16px;

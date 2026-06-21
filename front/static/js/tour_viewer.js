@@ -878,14 +878,18 @@
       el.className = 'tv-nav-marker' + (isInfo ? ' is-info' : '');
       el.type = 'button';
 
-      const label = isInfo
-        ? (m.label || 'Информация')
-        : (m.target_point_name || 'Переход');
-      // Показываем подсказку только для переходов, чтобы инфо-точки не раскрывали текст на hover
-      if (!isInfo) {
-        el.title = label;
+      const transitionLabel = (m.label || '').trim();
+
+      if (!isInfo && transitionLabel) {
+        const tip = document.createElement('span');
+        tip.className = 'tv-nav-marker-tooltip';
+        tip.textContent = transitionLabel;
+        tip.setAttribute('role', 'tooltip');
+        el.appendChild(tip);
       }
-      el.setAttribute('aria-label', label);
+      el.setAttribute('aria-label', isInfo
+        ? (m.label || 'Информация')
+        : (transitionLabel || m.target_point_name || 'Переход'));
       el.dataset.markerId = String(m.id);
 
       // Click handled separately to avoid drag interference
