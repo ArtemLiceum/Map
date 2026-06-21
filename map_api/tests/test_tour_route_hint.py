@@ -80,6 +80,7 @@ class TourRouteHintAPITests(APITestCase):
         self.assertEqual(data["end_point_id"], self.p1.id)
         self.assertEqual(data["path"], [self.p2.id, self.p1.id])
         self.assertEqual(len(data["steps"]), 1)
+        self.assertEqual(data["point_plans"], {str(self.p2.id): self.plan.id, str(self.p1.id): self.plan.id})
 
     def test_route_hint_all_viewed(self):
         self.client.force_authenticate(self.user)

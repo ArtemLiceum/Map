@@ -51,6 +51,27 @@ describe("tour_viewer route state", () => {
     expect(svg.innerHTML).toContain("polyline");
   });
 
+  test("applyRouteApiResult uses fallback point plans in facility mode", () => {
+    const api = loadTourViewerModule();
+    const { state, applyRouteApiResult, updateRoutePolyline } = api;
+    state.facilityId = 1;
+    state.points = [
+      { id: 1, x: 0, y: 0 },
+      { id: 2, x: 50, y: 50 },
+    ];
+    state.activePointId = 1;
+    const ok = applyRouteApiResult({
+      found: true,
+      path: [1, 2],
+      steps: [{ from_point_id: 1, to_point_id: 2, marker_id: 9 }],
+    });
+    expect(ok).toBe(true);
+    expect(state.route.pointPlans).toEqual({ "1": 1, "2": 1 });
+    updateRoutePolyline();
+    const svg = document.getElementById("tvMinimapRoute");
+    expect(svg.innerHTML).toContain("polyline");
+  });
+
   test("validateMinimapAgainstRoute marks deviation on wrong step", () => {
     const api = loadTourViewerModule();
     const { state, validateMinimapAgainstRoute } = api;

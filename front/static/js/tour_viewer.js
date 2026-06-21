@@ -277,8 +277,7 @@
   function routePointLabel(point) {
     if (!point) return '';
     if (state.facilityId) {
-      const floor = point.plan_floor != null ? `этаж ${point.plan_floor}` : 'этаж ?';
-      return `${point.name || `Точка ${point.id}`} — ${point.plan_title || 'План'} (${floor})`;
+      return `${point.name || `Точка ${point.id}`} — ${point.plan_title || 'План'}`;
     }
     return point.name || `Точка ${point.id}`;
   }
@@ -498,7 +497,12 @@
     const pairs = [];
     const pointPlans = r.pointPlans || null;
     let idsToDraw = r.path;
-    if (state.facilityId && pointPlans && state.activePointId != null) {
+    if (
+      state.facilityId &&
+      pointPlans &&
+      Object.keys(pointPlans).length > 0 &&
+      state.activePointId != null
+    ) {
       const i = idsToDraw.indexOf(state.activePointId);
       if (i === -1) {
         svg.innerHTML = '';
@@ -671,17 +675,28 @@
 
   function applyRouteApiResult(data, endPointIdOverride) {
     if (!data || !data.found) return false;
+    const path = Array.isArray(data.path) ? data.path.map(Number).filter(Number.isFinite) : [];
+    if (!path.length) return false;
+    let pointPlans;
+    if (state.facilityId) {
+      if (data.point_plans && Object.keys(data.point_plans).length > 0) {
+        pointPlans = data.point_plans;
+      } else {
+        pointPlans = {};
+        for (const pid of path) pointPlans[String(pid)] = PLAN_ID;
+      }
+    }
     const endId =
       endPointIdOverride != null && Number.isFinite(Number(endPointIdOverride))
         ? Number(endPointIdOverride)
         : data.end_point_id != null
           ? Number(data.end_point_id)
-          : Number(data.path[data.path.length - 1]);
+          : Number(path[path.length - 1]);
     state.route = {
       endPointId: endId,
-      path: data.path,
+      path,
       steps: data.steps || [],
-      pointPlans: state.facilityId ? (data.point_plans || {}) : undefined,
+      pointPlans,
       deviation: 'none'
     };
     saveRouteToStorage();

@@ -1259,8 +1259,7 @@ async function openPanorama(point){
     markerTargetPlans.forEach(p => {
       const opt = document.createElement('option');
       opt.value = String(p.id);
-      const floor = (p.floor === null || typeof p.floor === 'undefined') ? '' : `этаж ${p.floor} — `;
-      opt.textContent = `${floor}${p.title || `План ${p.id}`} (ID: ${p.id})`;
+      opt.textContent = `${p.title || `План ${p.id}`} (ID: ${p.id})`;
       if (sameEntityId(p.id, selectedPlanId)) opt.selected = true;
       targetPlanSelect.appendChild(opt);
     });

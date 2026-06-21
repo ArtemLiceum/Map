@@ -431,6 +431,7 @@ class TourViewSet(viewsets.ModelViewSet):
             MapPoint.objects.filter(plan_id=plan_id, id__in=path).values_list('id', 'name')
         )
         point_names = {str(pid): names.get(pid, '') for pid in path}
+        point_plans = {str(pid): plan_id for pid in path}
 
         return Response(
             {
@@ -439,6 +440,7 @@ class TourViewSet(viewsets.ModelViewSet):
                 'path': path,
                 'steps': steps,
                 'point_names': point_names,
+                'point_plans': point_plans,
             }
         )
 

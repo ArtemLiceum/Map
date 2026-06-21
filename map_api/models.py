@@ -51,7 +51,7 @@ class EvacPlan(models.Model):
         verbose_name_plural = "Планы этажей"
 
     def __str__(self):
-        return f"{self.title} (этаж {self.floor})"
+        return f"{self.title}"
 
     def clean(self):
         super().clean()

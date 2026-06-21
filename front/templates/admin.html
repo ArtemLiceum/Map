@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Редактор плана эвакуации{% endblock %}
+{% block title %}Редактор виртуального тура{% endblock %}
 
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/style_admin.css' %}">
@@ -10,7 +10,7 @@
 
 {% block content %}
 <div class="container admin-evac-editor">
-  <h1 class="page-hero-title">Редактор виртуального тура — добавление точек и панорам</h1>
+  <h1 class="page-hero-title">Редактор виртуального тура</h1>
 
   <div class="row">
     <div class="panel">
@@ -18,7 +18,7 @@
       <div id="planEditHint" class="hint small"></div>
 
       <label for="planTitle">Название:</label>
-      <input id="planTitle" type="text" placeholder="Например: 1 этаж, корпус А" />
+      <input id="planTitle" type="text" placeholder="Например: 3 этаж, ФФМИ" />
       <div class="hint admin-section-actions" style="margin-top:6px;">
         <button id="planTitleSaveBtn" class="btn gray" type="button" style="display:none">Сохранить название</button>
       </div>
