@@ -83,6 +83,17 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Check deploy secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.VPS_HOST }}" ] && missing+=("VPS_HOST")
+          [ -z "${{ secrets.VPS_SSH_KEY }}" ] && missing+=("VPS_SSH_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing GitHub Actions secrets: ${missing[*]}"
+            echo "Add them at: Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -92,8 +103,15 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/map
-            git fetch origin
-            git pull --ff-only origin dev || git pull --ff-only origin master || git pull --ff-only origin main
+            BRANCH="${{ github.ref_name }}"
+            git fetch origin "$BRANCH"
+            git clean -fd \
+              -e .env \
+              -e media \
+              -e staticfiles \
+              -e deploy/CREDENTIALS.local.txt
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            git reset --hard "origin/$BRANCH"
             if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]; then
               echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u ArtemLiceum --password-stdin
             fi
