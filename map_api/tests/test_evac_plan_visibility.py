@@ -108,6 +108,29 @@ class EvacPlanVisibilityTests(APITestCase):
         self.active_plan.refresh_from_db()
         self.assertFalse(self.active_plan.is_active)
 
+    def test_staff_can_rename_plan(self):
+        self.client.force_authenticate(user=self.staff)
+        response = self.client.patch(
+            self._detail_url(self.active_plan.id),
+            {"title": "Renamed Plan"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["title"], "Renamed Plan")
+        self.active_plan.refresh_from_db()
+        self.assertEqual(self.active_plan.title, "Renamed Plan")
+
+    def test_regular_user_cannot_rename_plan(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            self._detail_url(self.active_plan.id),
+            {"title": "Hacked Title"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.active_plan.refresh_from_db()
+        self.assertEqual(self.active_plan.title, "Active Plan")
+
     def test_regular_user_cannot_patch_is_active(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.patch(

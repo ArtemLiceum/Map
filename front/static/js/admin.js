@@ -55,6 +55,10 @@ const entryAzimuthHint = document.getElementById('entryAzimuthHint');
 const entryAzimuthAuto = document.getElementById('entryAzimuthAuto');
 const entryAzimuthInput = document.getElementById('entryAzimuthInput');
 const planCropExistingBtn = document.getElementById('planCropExistingBtn');
+const planTitleSaveBtn = document.getElementById('planTitleSaveBtn');
+const planReplaceBtn = document.getElementById('planReplaceBtn');
+const planReplaceInput = document.getElementById('planReplaceInput');
+const planEditHint = document.getElementById('planEditHint');
 const panoramaCropBtn = document.getElementById('panoramaCropBtn');
 const panoramaReplaceBtn = document.getElementById('panoramaReplaceBtn');
 const panoramaReplaceInput = document.getElementById('panoramaReplaceInput');
@@ -336,6 +340,27 @@ async function patchPlanStartPoint(planId, pointIdOrNull) {
   return await res.json();
 }
 
+async function patchPlanTitle(planId, title) {
+  const res = await apiFetch(`${API.createPlan}${planId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (res.status === 403) {
+    throw new Error('Нет прав. Войдите как администратор.');
+  }
+  if (!res.ok) {
+    let detail = 'Не удалось обновить название плана';
+    try {
+      const err = await res.json();
+      if (err?.title) detail = Array.isArray(err.title) ? err.title.join(' ') : String(err.title);
+      else if (err?.detail) detail = String(err.detail);
+    } catch (_) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return await res.json();
+}
+
 async function createTour(planId, title, is_active = true) {
   const res = await apiFetch(API.createTour, {
     method: 'POST',
@@ -548,37 +573,88 @@ async function initFromQuery() {
 }
 
 // --- Handlers ---
+
+function currentPlanTitleFromInput() {
+  return (planTitle?.value || '').trim();
+}
+
+async function replacePlanImage(file) {
+  if (!state.plan?.id) throw new Error('Сначала выберите план');
+  const { file: croppedFile, crop } = await openCropperDialog({ file, title: 'Обрезка плана', aspect: '16:9' });
+  const title = currentPlanTitleFromInput() || state.plan.title;
+  const updated = await updatePlanImage(state.plan.id, croppedFile, crop, title);
+  state.plan = {
+    id: updated.id,
+    title: updated.title,
+    imageUrl: updated.image,
+    facility_id: updated.facility_id ?? (state.plan?.facility_id ?? null),
+    start_point_id: state.plan?.start_point_id ?? null,
+  };
+  if (planTitle) planTitle.value = updated.title || '';
+  saveState();
+  renderAll();
+}
+
 planUpload.addEventListener('change', async e => {
-  const file = e.target.files[0]; if(!file) return;
-  const titleFromInput = (planTitle?.value || '').trim();
+  const file = e.target.files[0];
+  planUpload.value = '';
+  if (!file) return;
+
+  if (state.plan?.id) {
+    try {
+      await replacePlanImage(file);
+    } catch (err) {
+      if (err.message !== 'Обрезка отменена') alert(err.message);
+      console.error(err);
+    }
+    return;
+  }
+
+  const titleFromInput = currentPlanTitleFromInput();
   const title = titleFromInput || prompt('Введите название плана:', file.name) || file.name;
-  const hasExisting = !!state.plan?.id;
 
   try {
     const { file: croppedFile, crop } = await openCropperDialog({ file, title: 'Обрезка плана', aspect: '16:9' });
-
-    // Если план уже есть — предлагаем заменить картинку в текущем плане
-    if (hasExisting && confirm('Заменить изображение текущего плана без пересоздания?')) {
-      const updated = await updatePlanImage(state.plan.id, croppedFile, crop, titleFromInput || state.plan.title);
-      state.plan = {
-        id: updated.id,
-        title: updated.title,
-        imageUrl: updated.image,
-        facility_id: updated.facility_id ?? (state.plan?.facility_id ?? null)
-      };
-      if (planTitle) planTitle.value = updated.title || '';
-      saveState(); renderAll();
-      return;
-    }
-
-    // Иначе создаём новый план
     const planData = await uploadPlan(croppedFile, title, crop);
     state.plan = { id: planData.id, title: planData.title, imageUrl: planData.image, facility_id: planData.facility_id ?? null };
     state.points = [];
     await refreshTours(state.plan.id);
     if (planTitle) planTitle.value = planData.title || '';
-    saveState(); renderAll();
-  } catch (err) { if (err.message !== 'Обрезка отменена') alert(err.message); console.error(err); }
+    saveState();
+    renderAll();
+  } catch (err) {
+    if (err.message !== 'Обрезка отменена') alert(err.message);
+    console.error(err);
+  }
+});
+
+planTitleSaveBtn?.addEventListener('click', async () => {
+  if (!state.plan?.id) return alert('Сначала выберите план');
+  const newTitle = currentPlanTitleFromInput();
+  if (!newTitle) return alert('Введите название плана');
+  if (newTitle === state.plan.title) return;
+  try {
+    const updated = await patchPlanTitle(state.plan.id, newTitle);
+    state.plan.title = updated.title;
+    saveState();
+    renderAll();
+  } catch (err) {
+    alert(err.message || 'Не удалось сохранить название');
+  }
+});
+
+planReplaceBtn?.addEventListener('click', () => planReplaceInput?.click());
+
+planReplaceInput?.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  planReplaceInput.value = '';
+  if (!file) return;
+  try {
+    await replacePlanImage(file);
+  } catch (err) {
+    if (err.message !== 'Обрезка отменена') alert(err.message);
+    console.error(err);
+  }
 });
 
 planCropExistingBtn?.addEventListener('click', async () => {
@@ -691,6 +767,13 @@ function renderAll() {
   plan.src = state.plan?.imageUrl || '';
   plan.style.display = state.plan?.imageUrl ? 'block':'none';
   if (planCropExistingBtn) planCropExistingBtn.style.display = state.plan?.imageUrl ? 'inline-block' : 'none';
+  if (planTitleSaveBtn) planTitleSaveBtn.style.display = state.plan?.id ? 'inline-block' : 'none';
+  if (planReplaceBtn) planReplaceBtn.style.display = state.plan?.imageUrl ? 'inline-block' : 'none';
+  if (planEditHint) {
+    planEditHint.textContent = state.plan?.id
+      ? 'Редактирование существующего тура. Измените название и нажмите «Сохранить название» или замените изображение плана.'
+      : 'Создание нового тура: введите название и загрузите изображение плана.';
+  }
 
   document.querySelectorAll('.marker').forEach(n => n.remove());
   state.points.forEach(pt => {

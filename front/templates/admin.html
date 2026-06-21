@@ -14,13 +14,21 @@
 
   <div class="row">
     <div class="panel">
-      <h3>1) Загрузить план (карта здания)</h3>
+      <h3>1) План виртуального тура</h3>
+      <div id="planEditHint" class="hint small"></div>
 
-      <label for="planTitle">Название плана:</label>
+      <label for="planTitle">Название:</label>
       <input id="planTitle" type="text" placeholder="Например: 1 этаж, корпус А" />
+      <div class="hint admin-section-actions" style="margin-top:6px;">
+        <button id="planTitleSaveBtn" class="btn gray" type="button" style="display:none">Сохранить название</button>
+      </div>
 
-      <label for="planUpload">Файл изображения:</label>
+      <label for="planUpload">Файл изображения (новый тур):</label>
       <input id="planUpload" type="file" accept="image/jpeg,image/png" />
+      <div class="hint admin-section-actions" style="margin-top:6px;">
+        <button id="planReplaceBtn" class="btn gray" type="button" style="display:none">Заменить изображение плана</button>
+        <input id="planReplaceInput" type="file" accept="image/jpeg,image/png" style="display:none">
+      </div>
 
       <div class="hint">(JPG или PNG)</div>
 
@@ -210,5 +218,5 @@
 
 <!-- Подключаем JS -->
 <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
-<script src="{% static 'js/admin.js' %}?v=2026-06-21"></script>
+<script src="{% static 'js/admin.js' %}?v=2026-06-21b"></script>
 {% endblock %}
